@@ -68,6 +68,6 @@ oc get all
 
 - exemples
 ```bash
-./compose2manifests.sh prod secret kompose helm
+./compose2manifests.sh prod item secret kompose helm
 ./compose2manifests.sh local qualimarc secret kompose helm
 ```
