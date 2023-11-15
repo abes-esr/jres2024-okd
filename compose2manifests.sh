@@ -9,8 +9,8 @@
 case $2 in
 	'' | help | --help)
 	 	echo -e "usage: ./compose2manifests.sh [ prod || test || dev || local ] [ appli_name ] [default || '' || secret || env_file | help] [kompose] [helm]\n"
-		echo -e "diplotaxis{n}: nom du diplotaxis sur lequel récupérer le .env. Local: fournir manuellement les '.env' et 'docker-compose.yml'"
-		echo -e "appli_name: nom de l'application à convertir"
+		echo -e "dev|test|prod: \tenvironnement sur lequel récupérer le .env. Local: fournir manuellement les '.env' et 'docker-compose.yml'"
+		echo -e "appli_name: \tnom de l'application à convertir"
 		echo -e "default or '' : \tGenerates cleaned appli.yml compose file to plain k8s manifests "
 		echo -e "env_file: \t\tGenerates cleaned advanced appli.yml with migrating plain 'environment' \n\t\t\tto 'env_file' statement, will be converted into k8s configmaps"
 		echo -e "secret: \t\tThe same as env_file, in addition generates advanced appli.yml with \n\t\t\tmigrating all vars containing 'PASSWORD' or 'KEY' as keyword to secret,\n\t\t\twill be converted into k8s secrets"
@@ -29,7 +29,7 @@ case $3 in
         ;;
 	*)
 	 	echo -e "usage: ./compose2manifests.sh [ prod || test || dev || local ] [ appli_name ] [default || '' || secret || env_file | help] [kompose] [helm]\n"
-		echo -e "diplotaxis{n}: nom du diplotaxis sur lequel récupérer le .env. Local: fournir manuellement les '.env' et 'docker-compose.yml'"
+		echo -e "dev|test|prod: \tenvironnement sur lequel récupérer le .env. Local: fournir manuellement les '.env' et 'docker-compose.yml'"
 		echo -e "appli_name: nom de l'application à convertir"
 		echo -e "default or '' : \tGenerates cleaned appli.yml compose file to plain k8s manifests "
 		echo -e "env_file: \t\tGenerates cleaned advanced appli.yml with migrating plain 'environment' \n\t\t\tto 'env_file' statement, will be converted into k8s configmaps"
@@ -53,7 +53,48 @@ if [ "$3" = "clean" ]; then
 	exit;
 fi
 
-echo "ETAPE 2: Téléchargement du docker-compose"
+echo "ETAPE 2: Installation des pré-requis"
+install_bin () {
+  if ! [ -f /usr/local/bin/$1 ];then
+        case $1 in
+                jq)
+                        BIN="jqlang/jq/releases/latest/download/jq-linux-amd64";;
+                yq)
+                        BIN="mikefarah/yq/releases/latest/download/yq_linux_amd64";;
+                docker-compose)
+                        BIN="docker/compose/releases/latest/download/docker-compose-linux-x86_64";;
+                kompose)
+                        BIN="kubernetes/kompose/releases/latest/download/kompose-linux-amd64";;
+                *)
+                ;;
+        esac
+        sudo wget -q https://github.com/${BIN} -O /usr/local/bin/$1 &&  sudo  chmod +x /usr/local/bin/$1
+  fi
+  case $1 in
+          jq|yq) $1 --version;;
+          kompose) echo "kompose $($1 version)";;
+          *) $1 version;;
+  esac
+}
+for i in jq yq docker-compose kompose; do install_bin $i; done
+
+case $(cat /etc/os-release | grep ID_LIKE) in \
+        *debian*) \
+                apt install moreutils -y;; \
+        *rhel*) \
+                if [[ "$(cat /etc/os-release | grep VERSION_ID)" =~ .*8.* ]];then
+                dnf config-manager --set-enabled powertools powertools
+                else
+                dnf config-manager --set-enabled powertools crb
+                fi
+                dnf -q install moreutils -y;; \
+        *) \
+                echo "Not supported plateform!" \
+                exit 1;; \
+esac
+echo "All prerequired package installed!"
+
+echo "ETAPE 3: Téléchargement du docker-compose"
 
 if [[ "$1" == "prod" ]] || [[ "$1" == "test" ]] || [[ "$1" == "dev" ]]; then
 		diplo=$(for i in {1..6}; \
