@@ -44,8 +44,9 @@ esac
 echo "###########################################"
 echo "ETAPE 1: Initialisation du projet..."
 echo "1> Nettoyage..."
+if [ -f ./okd ];then rm -rf okd; done
 shopt -s extglob
-rm -rf !(.env|docker-compose.yml|*.sh|.git|)
+rm -rf !(.env|docker-compose.yml|*.sh|.git|.|..)
 echo -e "\n"
 
 if [ "$3" = "clean" ]; then
@@ -276,7 +277,7 @@ fi
 
 echo -e "\nYou are ready to deploy $NAME application into OKD\n"
 case $1 in
-	local) echo "Chose your OKD environment and run \'oc apply -f \"*.yaml\"\'";;
-	*) echo "Connect to your $1 OKD environment and run \'oc apply -f \"*.yaml\"\'";;
+	local) echo "Chose your OKD environment and run \'oc apply -f \"*.yaml\"\'\n";;
+	*) echo "Connect to your $1 OKD environment and run \'oc apply -f \"*.yaml\"\'\n";;
 esac
 
