@@ -51,6 +51,6 @@ oc get all
 
 - exemples
 ```
-./compose2manifests.sh secret kompose helm
-./compose2manifests.sh prod qualimarc secret kompose helm ./compose2manifests.sh local qualimarc secret kompose helm
+./compose2manifests.sh prod secret kompose helm
+./compose2manifests.sh local qualimarc secret kompose helm
 ```
