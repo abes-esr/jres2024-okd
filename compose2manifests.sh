@@ -45,7 +45,7 @@ echo "###########################################"
 echo "ETAPE 1: Initialisation du projet..."
 echo "1> Nettoyage..."
 shopt -s extglob
-rm -rf !(.env|docker-compose.yml|*.sh)
+rm -rf !(.env|docker-compose.yml|*.sh|.git|)
 echo -e "\n"
 
 if [ "$3" = "clean" ]; then
