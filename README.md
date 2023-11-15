@@ -15,14 +15,15 @@ Il faut comme prérequis les paquets
 - kompose
 
 Ensuite il suffit d'exécuter simplement:
-```
+```bash
+chmod +x compose2manifests.sh
 ./compose2manifests.sh 
 ```
 
 pour obtenir les manifests k8s correspondant: deployment et services.
 
 Pour déployer l'appli dans OKD/k8s:
-```
+```bash
 export KUBECONFIG=~/orchidee_install/auth/kubeconfig
 oc apply -f "*.yaml"
 oc get all
@@ -30,7 +31,7 @@ oc get all
 ```
 #### Options du script
 
-```
+```bash
 ./compose2manifests.sh [ prod || test || dev || local ] [ appli_name ] [default || '' || secret || env_file | help] [kompose] [helm]"
 
 ```
@@ -50,7 +51,7 @@ oc get all
 - $7: helm: Kompose option that generates k8s manifest into helm skeleton for appli.yml
 
 - exemples
-```
+```bash
 ./compose2manifests.sh prod secret kompose helm
 ./compose2manifests.sh local qualimarc secret kompose helm
 ```
