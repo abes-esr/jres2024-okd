@@ -44,7 +44,7 @@ esac
 echo "###########################################"
 echo "ETAPE 1: Initialisation du projet..."
 echo "1> Nettoyage..."
-if [ -f ./okd ];then rm -rf okd; done
+if [ -f ./okd ];then rm -rf okd; fi
 shopt -s extglob
 rm -rf !(.env|docker-compose.yml|*.sh|.git|.|..)
 echo -e "\n"
