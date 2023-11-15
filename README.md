@@ -7,8 +7,8 @@
 Le but de ce repo est de rassembler différents scripts bash, python, ansible visant à normaliser et convertir un fichier docker-compose.yml en manifests k8s avec différentes options telles que la gestion des env_file et des secrets.
 
 Cette procédure ne nécessite qu'un simple fichier docker-compose.yml et du .env correspondant dans le répertoire courant. 
-Il faut comme prérequis les paquets jq, yq, moreutils, docker-compose, kompose
-
+Il faut comme prérequis les paquets 
+- [jq, yq, moreutils, docker-compose, kompose ]
 Ensuite il suffit d'exécuter simplement:
 ```
 ./compose2manifests.sh 
