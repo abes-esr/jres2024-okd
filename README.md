@@ -40,9 +40,9 @@ oc get all
 
 5. secret: The same as env_file, in addition generates advanced appli.yml with migrating all vars containing 'PASSWORD' or 'KEY' as keyword to secret,will be converted into k8s secrets"
 
-6. kompose: Converts appli.yml into plain k8s manifests ready to be deployed with 'kubectl apply -f *.yaml"
+6. kompose: Converts appli.yml into plain k8s manifests ready to be deployed with 'kubectl apply -f *.yaml
 
-7. helm: Kompose option that generates k8s manifest into helm skeleton for appli.yml"
+7. helm: Kompose option that generates k8s manifest into helm skeleton for appli.yml
 
 8. exemples
 ```
