@@ -8,7 +8,12 @@ Le but de ce repo est de rassembler différents scripts bash, python, ansible vi
 
 Cette procédure ne nécessite qu'un simple fichier docker-compose.yml et du .env correspondant dans le répertoire courant. 
 Il faut comme prérequis les paquets 
-- [jq, yq, moreutils, docker-compose, kompose ]
+- jq
+- yq
+- moreutils
+- docker-compose
+- kompose
+
 Ensuite il suffit d'exécuter simplement:
 ```
 ./compose2manifests.sh 
