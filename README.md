@@ -18,11 +18,11 @@ sudo wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd6
 ```
 - docker-compose
 ```bash
-sudo https://github.com/docker/compose/releases/latest/download/docker-compose-linux-aarch64 -O /usr/local/bin/docker-compose &&  sudo  chmod +x /usr/bin/docker-compose
+sudo wget https://github.com/docker/compose/releases/latest/download/docker-compose-linux-aarch64 -O /usr/local/bin/docker-compose &&  sudo  chmod +x /usr/bin/docker-compose
 ```
 - kompose
 ```bash
-sudo https://github.com/kubernetes/kompose/releases/latest/download/kompose-linux-amd64 -O /usr/local/bin/kompose &&  sudo  chmod +x /usr/bin/kompose
+sudo wget https://github.com/kubernetes/kompose/releases/latest/download/kompose-linux-amd64 -O /usr/local/bin/kompose &&  sudo  chmod +x /usr/bin/kompose
 ```
 - moreutils
 ```bash
@@ -48,7 +48,7 @@ oc get all
 #### Options du script
 
 ```bash
-./compose2manifests.sh [ prod || test || dev || local ] [ appli_name ] [default || '' || secret || env_file | help] [kompose] [helm]"
+./compose2manifests.sh [ prod || test || dev || local ] [ appli_name ] [default || '' || secret || env_file | help] [kompose] [helm]
 
 ```
 
