@@ -7,12 +7,28 @@ Le but de ce repo est de rassembler différents scripts bash, python, ansible vi
 
 ### Script Bash
 Cette procédure ne nécessite qu'un simple fichier docker-compose.yml et du .env correspondant dans le répertoire courant. 
-Il faut comme prérequis les paquets 
+Il faut comme prérequis les paquets (la procédure est indépendante de l'OS)
 - jq
+```bash
+sudo wget https://github.com/jqlang/jq/releases/latest/download/jq-linux-amd64 -O /usr/local/bin/jq &&  sudo  chmod +x /usr/bin/jq
+```
 - yq
-- moreutils
+```bash
+sudo wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/local/bin/yq &&  sudo  chmod +x /usr/bin/yq
+```
 - docker-compose
+```bash
+sudo https://github.com/docker/compose/releases/latest/download/docker-compose-linux-aarch64 -O /usr/local/bin/docker-compose &&  sudo  chmod +x /usr/bin/docker-compose
+```
 - kompose
+```bash
+sudo https://github.com/kubernetes/kompose/releases/latest/download/kompose-linux-amd64 -O /usr/local/bin/kompose &&  sudo  chmod +x /usr/bin/kompose
+```
+- moreutils
+```bash
+yum install moreutils -y 
+apt install moreutils -y
+```
 
 Ensuite il suffit d'exécuter simplement:
 ```bash
@@ -36,19 +52,19 @@ oc get all
 
 ```
 
-- $1: dev|test|prod: environnement sur lequel récupérer le .env. Local: fournir manuellement les '.env' et 'docker-compose.yml'
+- **$1** dev|test|prod: environnement sur lequel récupérer le .env. Local: fournir manuellement les '.env' et 'docker-compose.yml'
 
-- $2: appli_name: nom de l'application à convertir
+- **$2** appli_name: nom de l'application à convertir
 
-- $3: default or '' : Generates cleaned appli.yml compose file to plain k8s manifests
+- **$3** default or '' : Generates cleaned appli.yml compose file to plain k8s manifests
 
-- $4:  env_file: Generates cleaned advanced appli.yml with migrating plain 'environment' to 'env_file' statement, will be converted into k8s configmaps"
+- **$4** env_file: Generates cleaned advanced appli.yml with migrating plain 'environment' to 'env_file' statement, will be converted into k8s configmaps"
 
-- $5: secret: The same as env_file, in addition generates advanced appli.yml with migrating all vars containing 'PASSWORD' or 'KEY' as keyword to secret,will be converted into k8s secrets"
+- **$5** secret: The same as env_file, in addition generates advanced appli.yml with migrating all vars containing 'PASSWORD' or 'KEY' as keyword to secret,will be converted into k8s secrets"
 
-- $6: kompose: Converts appli.yml into plain k8s manifests ready to be deployed with 'kubectl apply -f *.yaml
+- **$6** kompose: Converts appli.yml into plain k8s manifests ready to be deployed with 'kubectl apply -f *.yaml
 
-- $7: helm: Kompose option that generates k8s manifest into helm skeleton for appli.yml
+- **$7** helm: Kompose option that generates k8s manifest into helm skeleton for appli.yml
 
 - exemples
 ```bash
