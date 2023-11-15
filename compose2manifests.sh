@@ -92,7 +92,7 @@ case $(cat /etc/os-release | grep ID_LIKE) in \
                 echo "Not supported plateform!" \
                 exit 1;; \
 esac
-echo "All prerequired package installed!"
+echo -e "All prerequired package installed!\n"
 
 echo "ETAPE 3: Téléchargement du docker-compose"
 
@@ -274,4 +274,9 @@ if [ -n "$4" ] && [ "$4" = "kompose" ]; then
 	fi
 fi
 
+echo -e "\nYou are ready to deploy $NAME application into OKD\n"
+case $1 in
+	local) echo "Chose your OKD environment and run \'oc apply -f \"*.yaml\"\'";;
+	*) echo "Connect to your $1 OKD environment and run \'oc apply -f \"*.yaml\"\'";;
+esac
 
