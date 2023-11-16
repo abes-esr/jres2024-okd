@@ -69,17 +69,12 @@ install_bin () {
                 *)
                 ;;
         esac
+        echo "Installing $1..."
         sudo wget -q https://github.com/${BIN} -O /usr/local/bin/$1 &&  sudo  chmod +x /usr/local/bin/$1
   fi
-  case $1 in
-          jq|yq) $1 --version;;
-          kompose) echo "kompose $($1 version)";;
-          *) $1 version;;
-  esac
-}
-for i in jq yq docker-compose kompose; do install_bin $i; done
-
-case $(cat /etc/os-release | grep ID_LIKE) in \
+  if ! [ -f /usr/bin/sponge ];then
+                echo "Installing sponge..."
+                case $(cat /etc/os-release | grep ID_LIKE) in \
         *debian*) \
                 apt install moreutils -y;; \
         *rhel*) \
@@ -92,8 +87,18 @@ case $(cat /etc/os-release | grep ID_LIKE) in \
         *) \
                 echo "Not supported plateform!" \
                 exit 1;; \
-esac
-echo -e "All prerequired package installed!\n"
+                esac
+  fi
+  case $1 in
+          jq|yq) $1 --version;;
+          kompose) echo "kompose $($1 version)";;
+          *) $1 version;;
+  esac
+}
+
+for i in jq yq docker-compose kompose; do install_bin $i; done
+
+
 
 echo "ETAPE 3: Téléchargement du docker-compose"
 
@@ -107,7 +112,27 @@ if [[ "$1" == "prod" ]] || [[ "$1" == "test" ]] || [[ "$1" == "dev" ]]; then
 		wget -N https://raw.githubusercontent.com/abes-esr/$2-docker/develop/docker-compose.yml 2> /dev/null; \
 		echo $PWD; \
 		rsync -av root@$diplo:/opt/pod/$2-docker/.env .; \
-elif [ "$1" != "local" ]; then
+elif [[ "$1" == local ]];then
+		if ! [[ -f ./docker-compose.yml ]]; then
+			echo "If $2 is hosted on gitlab.abes.fr, you can download your docker-compose.yml (yes/no)?"
+			read rep
+			if [[ "$rep" == "yes" ]];then
+				echo "Please provide your gitlab private token (leave empty if public repo)"
+				read token
+				ID=$(curl -s --header "PRIVATE-TOKEN: $token" https://git.abes.fr/api/v4/projects | \
+				jq -r --arg toto "$2" '.[] | select(.name==$toto)| .id')
+				curl -s --header "PRIVATE-TOKEN: $token" https://git.abes.fr/api/v4/projects/${id}/repository/files/docker-compose.yml/raw?ref=main > docker-compose.yml
+				vi docker-compose.yml
+				if ! [[ -f ./.env ]];then
+					echo "Please manually Provide a \".env\" file"
+					exit 1
+				fi
+			else
+				echo "You may manually copy your \"docker-compose.yml\" and \".env\" file into $pwd"
+				exit 1
+			fi
+		fi
+elif [[ "$1" != "local" ]]; then
 		echo "Valid verbs are 'github' or 'local'"
 		exit 1;
 elif ! test -f .env || ! test -f docker-compose.yml; then
