@@ -103,6 +103,15 @@ for i in jq yq docker-compose kompose; do install_bin $i; done
 echo "ETAPE 3: Téléchargement du docker-compose"
 
 if [[ "$1" == "prod" ]] || [[ "$1" == "test" ]] || [[ "$1" == "dev" ]]; then
+		echo "##### Avertissement! #######################"
+		echo "Il faut que clé ssh valide sur tous les diplotaxis{} pour continuer...."
+		echo "Continuer? (yes/no)"
+		read continue
+		if [[ "$continue" != "yes" ]]; then 
+			echo: "Please re-execute the script after having installed your ssh pub keys on diplotaxis{}-${1}"
+			exit 1;
+		fi
+		echo "Ok, let's go on!"
 		diplo=$(for i in {1..6}; \
 		do ssh root@diplotaxis$i-${1} docker ps --format json | jq --arg toto "diplotaxis${i}-${1}" '{diplotaxis: ($toto), nom: .Names}'; \
 		done \
@@ -124,7 +133,7 @@ elif [[ "$1" == local ]];then
 				curl -s --header "PRIVATE-TOKEN: $token" https://git.abes.fr/api/v4/projects/${ID}/repository/files/docker-compose.yml/raw?ref=main > docker-compose.yml
 				vi docker-compose.yml
 				if ! [[ -f ./.env ]];then
-					echo "Please manually Provide a \".env\" file"
+					echo "Please manually rovide a valid \".env\" file"
 					exit 1
 				fi
 			else
@@ -291,7 +300,6 @@ if [ -n "$4" ] && [ "$4" = "kompose" ]; then
 	echo -e "6> #################### génération des manifests ####################\n"
 	if [ -n "$5" ] && [ "$5" = "helm" ]; then  
 		kompose -f $CLEANED convert -c
-		rm -f !(.env|docker-compose.yml|*.sh|.git|.|..)
 	else
 		kompose -f $CLEANED convert
 	fi
