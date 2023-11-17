@@ -121,7 +121,7 @@ elif [[ "$1" == local ]];then
 				read token
 				ID=$(curl -s --header "PRIVATE-TOKEN: $token" https://git.abes.fr/api/v4/projects | \
 				jq -r --arg toto "$2" '.[] | select(.name==$toto)| .id')
-				curl -s --header "PRIVATE-TOKEN: $token" https://git.abes.fr/api/v4/projects/${id}/repository/files/docker-compose.yml/raw?ref=main > docker-compose.yml
+				curl -s --header "PRIVATE-TOKEN: $token" https://git.abes.fr/api/v4/projects/${ID}/repository/files/docker-compose.yml/raw?ref=main > docker-compose.yml
 				vi docker-compose.yml
 				if ! [[ -f ./.env ]];then
 					echo "Please manually Provide a \".env\" file"
@@ -132,6 +132,10 @@ elif [[ "$1" == local ]];then
 				exit 1
 			fi
 		fi
+		if ! [[ -f .env ]];then
+			echo "Please provide a valid \".env\" file to continue"
+			exit 1;
+		fi
 elif [[ "$1" != "local" ]]; then
 		echo "Valid verbs are 'github' or 'local'"
 		exit 1;
@@ -141,8 +145,8 @@ elif ! test -f .env || ! test -f docker-compose.yml; then
 fi 
 
 echo "2> Définition du nom du projet"
-# NAME="${NAME_tmp=$(cat docker-compose.yml | yq eval -o json | jq -r '[.services[]]| .[0].container_name' | cut -d'-' -f1)}.yml"
-NAME=$(cat docker-compose.yml | yq eval -o json | jq -r '[.services[]]| .[0].container_name' | cut -d'-' -f1)
+# NAME=$(cat docker-compose.yml | yq eval -o json | jq -r '[.services[]]| .[0].container_name' | cut -d'-' -f1)
+NAME=$2
 echo -e "projet: $NAME\n"
 
 echo "############################################"
@@ -170,8 +174,8 @@ docker-compose -f $NAME.yml convert --format json \
 if [ $(echo $?) = "0" ] ; then echo "...OK"; else echo "echec!!!"; exit 1;fi 
 
 #### NBT 231108
-#### insertion de la clé "secrets" dans chacun des services de docker-compose-resolved-cleaned.yaml
-#### prend en paramètre le nom du fichier docker-compose-resolved-cleaned.yaml
+#### insertion de la clé "secrets" dans chacun des services de docker-compose.yml
+#### prend en paramètre le nom du fichier docker-compose.yml
 
 CLEANED="$NAME.yml"
 
@@ -181,7 +185,7 @@ if [ -n "$3" ]; then
 
 		if [ "$3" = "secret" ]; then
 
-			######  transformation du docker-compose-resolved-cleaned.yaml en liste réduite ######
+			######  transformation du docker-compose.yml en liste réduite ######
 			# SMALL_LIST=$(cat $CLEANED | yq eval - -o json | jq '[.services[]|  {(.container_name): .environment}]') 
 			SMALL_LIST=$(cat $CLEANED | yq eval - -o json | jq '.services|to_entries[] | {(.key): .value.environment}'| jq -s)
 			#echo $SMALL_LIST| yq eval -P
@@ -227,30 +231,22 @@ if [ -n "$3" ]; then
 
 		########### Conversion du environment en env_file ############
 
-		# 3> Génération des {service}.env à partir du docker-compose-resolved-cleaned.yml
+		# 3> Génération des {service}.env à partir du docker-compose.yml
 		echo -e "3> #################### Génération des {service}.env ####################\n"
-		for i in $(cat $CLEANED | yq eval - -o json | jq -r '.services|keys|flatten[]'); \
-			do echo $i; 
-				# if [ "$3" = "secret" ]; 
-				# 	then 
-						cat $CLEANED | \
-						yq eval - -o json |\
-						jq -r --arg var "$i" '.services[$var].environment' | \
-						egrep -v 'KEY|PASSWORD' | \
-						yq eval - -P| \
-						sed "s/:\ /=/g" > $i.env; \
-			# 	else cat $CLEANED | \
-			#             yq eval - -o json |\
-			#             jq -r --arg var "$i" '.services[$var].environment' | \
-			#             yq eval - -P| \
-			#             sed "s/:\ /=/g" > $i.env; \
-			# 	fi 
+		for i in $(cat $CLEANED|yq eval -ojson|jq -r --arg var "$i" '.services|to_entries|map(select(.value.environment != null)|.key)|flatten[]'); \
+			do \ 
+				cat $CLEANED | \
+				yq eval - -o json |\
+				jq -r --arg var "$i" '.services[$var].environment' | \
+				egrep -v 'KEY|PASSWORD' | \
+				yq eval - -P| \
+				sed "s/:\ /=/g" > $i.env; 
 			done
 		if [ $(echo $?) = "0" ] ; then echo "...OK"; else echo "echec!!!"; exit 1;fi 
 
-		# 4> Déclaration des {services.env} dans docker-compose-resolved-cleaned.yml
+		# 4> Déclaration des {services.env} dans docker-compose.yml
 		echo -e "4> #################### Déclaration des {services.env} ####################\n"
-		for i in $(cat $CLEANED | yq eval - -o json | jq -r '.services|keys|flatten[]'); \
+		for i in $(cat $CLEANED|yq eval -ojson|jq -r --arg var "$i" '.services|to_entries|map(select(.value.environment != null)|.key)|flatten[]'); \
 			do echo $i; cat $CLEANED | \
 						yq eval - -o json | \
 						jq -r  --arg var "$i" '.services[$var]."env_file" = $var +".env"' | \
@@ -295,6 +291,7 @@ if [ -n "$4" ] && [ "$4" = "kompose" ]; then
 	echo -e "6> #################### génération des manifests ####################\n"
 	if [ -n "$5" ] && [ "$5" = "helm" ]; then  
 		kompose -f $CLEANED convert -c
+		rm -f !(.env|docker-compose.yml|*.sh|.git|.|..)
 	else
 		kompose -f $CLEANED convert
 	fi
