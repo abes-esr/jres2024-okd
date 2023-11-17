@@ -228,7 +228,7 @@ if [ -n "$3" ]; then
 			# export data=$(echo $FILTER_LIST | jq  -r '.[].value.value') \
 			for i in $(echo $var); \
 			do export data=$(echo $FILTER_LIST | jq --arg tata "$i" -r '[.[].value | select(.key==$tata).value]|first')
-				echo $data > $i.txt; \
+				echo $data|tr '[:upper:]' '[:lower:]' | tr "_" -) > $i.txt; \
 				cat $CLEANED \
 				| yq eval - -o json \
 				| jq --arg toto $i '.secrets[$toto].file = $toto + ".txt"' \
