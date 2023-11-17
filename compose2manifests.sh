@@ -108,7 +108,7 @@ if [[ "$1" == "prod" ]] || [[ "$1" == "test" ]] || [[ "$1" == "dev" ]]; then
 		echo "Continuer? (yes/no)"
 		read continue
 		if [[ "$continue" != "yes" ]]; then 
-			echo: "Please re-execute the script after having installed your ssh pub keys on diplotaxis{}-${1}"
+			echo "Please re-execute the script after having installed your ssh pub keys on diplotaxis{}-${1}"
 			exit 1;
 		fi
 		echo "Ok, let's go on!"
@@ -243,8 +243,7 @@ if [ -n "$3" ]; then
 		# 3> Génération des {service}.env à partir du docker-compose.yml
 		echo -e "3> #################### Génération des {service}.env ####################\n"
 		for i in $(cat $CLEANED|yq eval -ojson|jq -r --arg var "$i" '.services|to_entries|map(select(.value.environment != null)|.key)|flatten[]'); \
-			do \ 
-				cat $CLEANED | \
+			do 	cat $CLEANED | \
 				yq eval - -o json |\
 				jq -r --arg var "$i" '.services[$var].environment' | \
 				egrep -v 'KEY|PASSWORD' | \
