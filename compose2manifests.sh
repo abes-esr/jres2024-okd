@@ -56,7 +56,7 @@ fi
 
 echo "ETAPE 2: Installation des pré-requis"
 install_bin () {
-  if ! [ -f /usr/local/bin/$1 ];then
+  if ! [ -f /usr/local/bin/$1 ] && ! [ -f /usr/bin/$1 ];then
         case $1 in
                 jq)
                         BIN="jqlang/jq/releases/latest/download/jq-linux-amd64";;
