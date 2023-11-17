@@ -56,7 +56,7 @@ fi
 
 echo "ETAPE 2: Installation des pré-requis"
 install_bin () {
-  if ! [ -f /usr/local/bin/$1 ] && ! [ -f /usr/bin/$1 ];then
+  if ! [ -f /usr/local/bin/$1 ];then
         case $1 in
                 jq)
                         BIN="jqlang/jq/releases/latest/download/jq-linux-amd64";;
@@ -216,7 +216,7 @@ if [ -n "$3" ]; then
 
 			###### Injection dans le json #####
 			for i in $(echo $PAIR_LIST); \
-				do export KEY=$(echo $i| cut -d':' -f1|tr '[:upper:]' '[:lower:]' | tr "_" -); \
+				do export KEY=$(echo $i| cut -d':' -f1); \
 				export service=$(echo $i| cut -d':' -f2-); \
 				cat $CLEANED | yq eval - -o json| jq --arg toto "$service" --arg tata "$KEY" '.services[$toto].secrets |= . + [$tata]' \
 					| yq eval - -P | sponge $CLEANED; \
@@ -224,7 +224,7 @@ if [ -n "$3" ]; then
 			if [ $(echo $?) = "0" ] ; then echo "...OK"; else echo "echec!!!"; exit 1;fi 
 		
 			###### Generating secret files from .env file  #####
-			export var=$(echo $FILTER_LIST | jq  -r '.[].value.key|ascii_downcase') \
+			export var=$(echo $FILTER_LIST | jq  -r '.[].value.key') \
 			# export data=$(echo $FILTER_LIST | jq  -r '.[].value.value') \
 			for i in $(echo $var); \
 			do export data=$(echo $FILTER_LIST | jq --arg tata "$i" -r '[.[].value | select(.key==$tata).value]|first')
@@ -242,11 +242,11 @@ if [ -n "$3" ]; then
 
 		# 3> Génération des {service}.env à partir du docker-compose.yml
 		echo -e "3> #################### Génération des {service}.env ####################\n"
-		for i in $(cat $CLEANED|yq eval -ojson|jq -r --arg var "$i" '.services|to_entries|map(select(.value.environment != null)|.key)|flatten[]|ascii_downcase'); \
+		for i in $(cat $CLEANED|yq eval -ojson|jq -r --arg var "$i" '.services|to_entries|map(select(.value.environment != null)|.key)|flatten[]'); \
 			do 	cat $CLEANED | \
 				yq eval - -o json |\
 				jq -r --arg var "$i" '.services[$var].environment' | \
-				egrep -iv 'KEY|PASSWORD' | \
+				egrep -v 'KEY|PASSWORD' | \
 				yq eval - -P| \
 				sed "s/:\ /=/g" > $i.env; 
 			done
@@ -254,7 +254,7 @@ if [ -n "$3" ]; then
 
 		# 4> Déclaration des {services.env} dans docker-compose.yml
 		echo -e "4> #################### Déclaration des {services.env} ####################\n"
-		for i in $(cat $CLEANED|yq eval -ojson|jq -r --arg var "$i" '.services|to_entries|map(select(.value.environment != null)|.key)|flatten[]|ascii_downcase'); \
+		for i in $(cat $CLEANED|yq eval -ojson|jq -r --arg var "$i" '.services|to_entries|map(select(.value.environment != null)|.key)|flatten[]'); \
 			do echo $i; cat $CLEANED | \
 						yq eval - -o json | \
 						jq -r  --arg var "$i" '.services[$var]."env_file" = $var +".env"' | \
