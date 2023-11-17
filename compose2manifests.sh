@@ -224,11 +224,11 @@ if [ -n "$3" ]; then
 			if [ $(echo $?) = "0" ] ; then echo "...OK"; else echo "echec!!!"; exit 1;fi 
 		
 			###### Generating secret files from .env file  #####
-			export var=$(echo $FILTER_LIST | jq  -r '.[].value.key') \
+			export var=$(echo $FILTER_LIST | jq  -r '.[].value.key|ascii_downcase') \
 			# export data=$(echo $FILTER_LIST | jq  -r '.[].value.value') \
 			for i in $(echo $var); \
 			do export data=$(echo $FILTER_LIST | jq --arg tata "$i" -r '[.[].value | select(.key==$tata).value]|first')
-				echo $data|tr '[:upper:]' '[:lower:]' | tr "_" -) > $i.txt; \
+				echo $data > $i.txt; \
 				cat $CLEANED \
 				| yq eval - -o json \
 				| jq --arg toto $i '.secrets[$toto].file = $toto + ".txt"' \
