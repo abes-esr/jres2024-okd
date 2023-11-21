@@ -6,20 +6,23 @@
 # Usage:
 # ./compose2manifests.sh [ prod || test || dev || local ] [ appli_name ] [default || '' || secret || env_file | help] [kompose] [helm]\n"
 
+help () {
+	echo -e "usage: ./compose2manifests.sh [ prod || test || dev || local ] [ appli_name ] [default || '' || secret || env_file | help] [kompose] [helm]\n"
+	echo -e "dev|test|prod: \tenvironnement sur lequel récupérer le .env. Local: fournir manuellement les '.env' et 'docker-compose.yml'"
+	echo -e "appli_name: \t\tnom de l'application à convertir"
+	echo -e "default or '' : \tGenerates cleaned appli.yml compose file to plain k8s manifests "
+	echo -e "env_file: \t\tGenerates cleaned advanced appli.yml with migrating plain 'environment' \n\t\t\tto 'env_file' statement, will be converted into k8s configmaps"
+	echo -e "secret: \t\tThe same as env_file, in addition generates advanced appli.yml with \n\t\t\tmigrating all vars containing 'PASSWORD' or 'KEY' as keyword to secret,\n\t\t\twill be converted into k8s secrets"
+	echo -e "kompose: \t\tConverts appli.yml into plain k8s manifests ready to be deployed with \n\t\t\t'kubectl apply -f *.yaml"
+	echo -e "helm: \t\t\tKompose option that generates k8s manifest into helm skeleton for appli.yml\n"
+	echo -e "example: ./compose2manifests.sh local item secret kompose\n"
+	echo -e "example: ./compose2manifests.sh prod qualimarc secret kompose helm\n"
+	exit 1
+}
+
 case $2 in
 	'' | help | --help)
-	 	echo -e "usage: ./compose2manifests.sh [ prod || test || dev || local ] [ appli_name ] [default || '' || secret || env_file | help] [kompose] [helm]\n"
-		echo -e "dev|test|prod: \tenvironnement sur lequel récupérer le .env. Local: fournir manuellement les '.env' et 'docker-compose.yml'"
-		echo -e "appli_name: \t\tnom de l'application à convertir"
-		echo -e "default or '' : \tGenerates cleaned appli.yml compose file to plain k8s manifests "
-		echo -e "env_file: \t\tGenerates cleaned advanced appli.yml with migrating plain 'environment' \n\t\t\tto 'env_file' statement, will be converted into k8s configmaps"
-		echo -e "secret: \t\tThe same as env_file, in addition generates advanced appli.yml with \n\t\t\tmigrating all vars containing 'PASSWORD' or 'KEY' as keyword to secret,\n\t\t\twill be converted into k8s secrets"
-		echo -e "kompose: \t\tConverts appli.yml into plain k8s manifests ready to be deployed with \n\t\t\t'kubectl apply -f *.yaml"
-		echo -e "helm: \t\t\tKompose option that generates k8s manifest into helm skeleton for appli.yml\n"
-		echo -e "example: ./compose2manifests.sh local item secret kompose\n"
-		echo -e "example: ./compose2manifests.sh prod qualimarc secret kompose helm\n"
-		exit 1
-		;;
+		help;;
 	*)
 		;;
 esac
@@ -28,17 +31,7 @@ case $3 in
 	default | '' | secret | env_file)
         ;;
 	*)
-	 	echo -e "usage: ./compose2manifests.sh [ prod || test || dev || local ] [ appli_name ] [default || '' || secret || env_file | help] [kompose] [helm]\n"
-		echo -e "dev|test|prod: \tenvironnement sur lequel récupérer le .env. Local: fournir manuellement les '.env' et 'docker-compose.yml'"
-		echo -e "appli_name: \tnom de l'application à convertir"
-		echo -e "default or '' : \tGenerates cleaned appli.yml compose file to plain k8s manifests "
-		echo -e "env_file: \t\tGenerates cleaned advanced appli.yml with migrating plain 'environment' \n\t\t\tto 'env_file' statement, will be converted into k8s configmaps"
-		echo -e "secret: \t\tThe same as env_file, in addition generates advanced appli.yml with \n\t\t\tmigrating all vars containing 'PASSWORD' or 'KEY' as keyword to secret,\n\t\t\twill be converted into k8s secrets"
-		echo -e "kompose: \t\tConverts appli.yml into plain k8s manifests ready to be deployed with \n\t\t\t'kubectl apply -f *.yaml"
-		echo -e "helm: \t\t\tKompose option that generates k8s manifest into helm skeleton for appli.yml\n"
-		echo -e "example: ./compose2manifests.sh diplotaxis1 qualimarc secret kompose helm\n ./compose2manifests.sh local qualimarc secret kompose helm"
-		exit 1
-		;;
+		help;;
 esac
 
 echo "###########################################"
@@ -98,7 +91,7 @@ install_bin () {
 
 for i in jq yq docker-compose kompose; do install_bin $i; done
 
-
+echo -e "\"
 
 echo "ETAPE 3: Téléchargement du docker-compose"
 
@@ -190,6 +183,7 @@ docker-compose -f $NAME.yml convert --format json \
 | docker-compose -f - convert | sponge $NAME.yml
 
 message
+echo -e "\n"
 
 #### NBT 231108
 #### insertion de la clé "secrets" dans chacun des services de docker-compose.yml
@@ -302,7 +296,7 @@ message
 fi
 
 cat $CLEANED 
-echo "\n"
+echo -e "\n"
 
 # Patch *.txt file to remove '\n' character based in 64
 patch_secret () {
