@@ -207,7 +207,7 @@ if [ -n "$3" ]; then
 
 			###### select variable name filtering by KEY or PASSWORD ####
 			FILTER_LIST=$(echo $SMALL_LIST | yq eval - -o json \
-							| jq '.[]|to_entries[]|try {key:.key,value:.value|to_entries[]} | select(.value.key | test("KEY|.*PASS.*"))' \
+							| jq '.[]|to_entries[]|try {key:.key,value:.value|to_entries[]} | select(.value.key | test("KEY|PASS|SECRET"))' \
 							| jq -s )
 			message
 
@@ -260,7 +260,7 @@ if [ -n "$3" ]; then
 		# 4> Déclaration des variables contenant un secret dans le env_file
 		for i in $(ls *.env); 
 			do 
-				for j in $(cat $i | egrep '(KEY|.*PASS.*)'); 
+				for j in $(cat $i | egrep '(KEY|PASS|SECRET)'); 
 					do 
 						KEY=$(echo $j | cut -d"=" -f1);
 						LINE=$(echo $KEY | cut -d"=" -f1 | tr '[:upper:]' '[:lower:]' | sed 's/_/-/g');
