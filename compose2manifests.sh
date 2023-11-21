@@ -302,7 +302,7 @@ if [ -n "$4" ] && [ "$4" = "kompose" ]; then
 		cd $NAME/templates
 		for i in $(ls *secret*); \
 		do  \
-			echo $i; 
+			echo "Patching $i..."; 
 			cat $i | yq eval -ojson \
 				   | jq -r '.data|=with_entries(.value |=(@base64d|sub("\n";"")|@base64))' \
 				   | sponge $i; \
@@ -311,7 +311,7 @@ if [ -n "$4" ] && [ "$4" = "kompose" ]; then
 		kompose -f $CLEANED convert
 		for i in $(ls *secret*); \
 		do  \
-			echo $i; 
+			echo "Patching $i..."; 
 			cat $i | yq eval -ojson \
 				   | jq -r '.data|=with_entries(.value |=(@base64d|sub("\n";"")|@base64))' \
 				   | sponge $i; \
