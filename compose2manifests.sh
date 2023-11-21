@@ -38,7 +38,7 @@ echo "###########################################"
 echo "ETAPE 1: Initialisation du projet..."
 echo "1> Nettoyage..."
 if [ -f ./okd ];then rm -rf okd; fi
-if [ "$?" != "2" ]; 
+if [ $(echo $?) != "22" ]; 
 	then 
 		shopt -s extglob;
 		rm -rf !(.env|docker-compose.yml|*.sh|.git|.|..);
@@ -139,7 +139,7 @@ elif [[ "$1" == local ]];then
 				fi
 			else
 				echo "You may manually copy your \"docker-compose.yml\" and \".env\" file into $pwd"
-				exit 2
+				exit 22
 			fi
 		fi
 		if ! [[ -f .env ]];then
