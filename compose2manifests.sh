@@ -232,7 +232,7 @@ if [ -n "$3" ]; then
 			export var=$(echo $FILTER_LIST | jq  -r '.[].value.key') \
 			# export data=$(echo $FILTER_LIST | jq  -r '.[].value.value') \
 			for i in $(echo $var); \
-			do export data=$(echo $FILTER_LIST | jq --arg tata "$i" -r '[.[].value | select(.key==$tata).value]|first|ascii_downcase|gsub("_";"-")')
+			do export data=$(echo $FILTER_LIST | jq --arg tata "$i" -r '[.[].value | select(.key==$tata).value]|first')
 				echo $data > $(echo $i| sed 's/_/-/g' | tr '[:upper:]' '[:lower:]').txt; \
 				cat $CLEANED \
 				| yq eval - -o json \
@@ -302,7 +302,7 @@ echo -e "\n"
 
 # Patch *.txt file to remove '\n' character based in 64
 patch_secret () {
-	for i in $(ls *secret*); \
+	for i in $(ls *secret*yaml); \
 		do  \
 			echo "Patching $i..."; 
 			cat $i | yq eval -ojson \
