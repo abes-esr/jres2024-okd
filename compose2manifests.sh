@@ -313,7 +313,6 @@ if [ -n "$4" ] && [ "$4" = "kompose" ]; then
 		kompose -f $CLEANED convert -c
 		cd $NAME/templates
 		patch_secret $i
-		done
 	else
 		kompose -f $CLEANED convert
 		patch_secret $i
