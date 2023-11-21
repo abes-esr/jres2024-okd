@@ -117,6 +117,7 @@ if [[ "$1" == "prod" ]] || [[ "$1" == "test" ]] || [[ "$1" == "dev" ]]; then
 		echo $PWD; \
 		rsync -av root@$diplo:/opt/pod/$2-docker/.env .; \
 elif [[ "$1" == local ]];then
+		mkdir $2-docker && cd $2-docker
 		if ! [[ -f ./docker-compose.yml ]]; then
 			echo "If $2 is hosted on gitlab.abes.fr, you can download your docker-compose.yml (yes/no)?"
 			read rep
