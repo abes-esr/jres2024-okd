@@ -119,9 +119,9 @@ if [[ "$1" == "prod" ]] || [[ "$1" == "test" ]] || [[ "$1" == "dev" ]]; then
 elif [[ "$1" == local ]];then
 		mkdir $2-docker && cd $2-docker
 		if ! [[ -f ./docker-compose.yml ]]; then
-			echo "If $2 is hosted on gitlab.abes.fr, you can download your docker-compose.yml (yes/no)?"
+			echo "If $2 is hosted on gitlab.abes.fr, you can download your docker-compose.yml (y/n)?"
 			read rep
-			if [[ "$rep" == "yes" ]];then
+			if [[ "$rep" == "y" ]];then
 				echo "Please provide your gitlab private token (leave empty if public repo)"
 				read token
 				ID=$(curl -s --header "PRIVATE-TOKEN: $token" https://git.abes.fr/api/v4/projects | \
@@ -129,7 +129,7 @@ elif [[ "$1" == local ]];then
 				curl -s --header "PRIVATE-TOKEN: $token" https://git.abes.fr/api/v4/projects/${ID}/repository/files/docker-compose.yml/raw?ref=main > docker-compose.yml
 				vi docker-compose.yml
 				if ! [[ -f ./.env ]];then
-					echo "Please manually rovide a valid \".env\" file"
+					echo "Please manually provide a valid \".env\" file in the same directory as docker-compose.yml file ($2-docker)"
 					exit 1
 				fi
 			else
