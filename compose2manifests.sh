@@ -47,6 +47,8 @@ if [ "$3" = "clean" ]; then
 	exit;
 fi
 
+echo -e "\n"
+
 echo "ETAPE 2: Installation des pré-requis"
 install_bin () {
   if ! [ -f /usr/local/bin/$1 ] && ! [ -f /usr/bin/$1 ];then
@@ -221,7 +223,7 @@ if [ -n "$3" ]; then
 			for i in $(echo $PAIR_LIST); \
 				do export KEY=$(echo $i| cut -d':' -f1); \
 				export service=$(echo $i| cut -d':' -f2-); \
-				cat $CLEANED | yq eval - -o json| jq --arg toto "$service" --arg tata "$KEY" '.services[$toto].secrets |= . + [$tata]' \
+				cat $CLEANED | yq eval - -o json| jq --arg toto "$service" --arg tata "$KEY|tr [:upper:] [:lower:]" '.services[$toto].secrets |= . + [$tata]' \
 					| yq eval - -P | sponge $CLEANED; \
 				done
 			message
