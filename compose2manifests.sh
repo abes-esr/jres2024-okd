@@ -264,7 +264,7 @@ if [ -n "$3" ]; then
 					do 
 						KEY=$(echo $j | cut -d"=" -f1);
 						LINE=$(echo $KEY | cut -d"=" -f1 | tr '[:upper:]' '[:lower:]' | sed 's/_/-/g');
-						sed "s/.*$KEY.*/$KEY=\/run\/secrets\/$LINE/g" $i;
+						sed -i "s/.*$KEY.*/$KEY=\/run\/secrets\/$LINE/g" $i;
 					done; 
 			done 
 
