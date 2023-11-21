@@ -38,18 +38,13 @@ echo "###########################################"
 echo "ETAPE 1: Initialisation du projet..."
 echo "1> Nettoyage..."
 if [ -f ./okd ];then rm -rf okd; fi
-if [ $(echo $?) = "22" ];then echo "copy .env file"; shopt -s extglob; rm -rf !(.env|docker-compose.yml|*.sh|.git|.|..);fi
-
 shopt -s extglob
 rm -rf !(.env|docker-compose.yml|*.sh|.git|.|..)
-
-
 echo -e "\n"
 
-if [ "$3" = "clean" ]; 
-	then
-		echo "Cleaned Wordir";
-		exit;
+if [ "$3" = "clean" ]; then
+	echo "Cleaned Wordir";
+	exit;
 fi
 
 echo -e "\n"
@@ -122,7 +117,6 @@ if [[ "$1" == "prod" ]] || [[ "$1" == "test" ]] || [[ "$1" == "dev" ]]; then
 		echo $PWD; \
 		rsync -av root@$diplo:/opt/pod/$2-docker/.env .; \
 elif [[ "$1" == local ]];then
-		mkdir $2-docker && cd $2-docker
 		if ! [[ -f ./docker-compose.yml ]]; then
 			echo "If $2 is hosted on gitlab.abes.fr, you can download your docker-compose.yml (y/n)?"
 			read rep
@@ -134,12 +128,12 @@ elif [[ "$1" == local ]];then
 				curl -s --header "PRIVATE-TOKEN: $token" https://git.abes.fr/api/v4/projects/${ID}/repository/files/docker-compose.yml/raw?ref=main > docker-compose.yml
 				vi docker-compose.yml
 				if ! [[ -f ./.env ]];then
-					echo "Please manually provide a valid \".env\" file in the same directory as docker-compose.yml file ($2-docker)"
+					echo "Please manually provide a valid \".env\" file in the same directory as docker-compose.yml file ($pwd)"
 					exit 1
 				fi
 			else
 				echo "You may manually copy your \"docker-compose.yml\" and \".env\" file into $pwd"
-				exit 22
+				exit 1
 			fi
 		fi
 		if ! [[ -f .env ]];then
