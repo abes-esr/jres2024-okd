@@ -299,7 +299,7 @@ if [ -n "$4" ] && [ "$4" = "kompose" ]; then
 	echo -e "6> #################### génération des manifests ####################\n"
 	if [ -n "$5" ] && [ "$5" = "helm" ]; then  
 		kompose -f $CLEANED convert -c
-		cd $NAME
+		cd $NAME/templates
 		for i in $(ls *secret*); \
 		do  \
 			echo $i; 
