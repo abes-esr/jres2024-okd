@@ -38,7 +38,7 @@ echo "###########################################"
 echo "ETAPE 1: Initialisation du projet..."
 echo "1> Nettoyage..."
 if [ -f ./okd ];then rm -rf okd; fi
-if [ $(echo $?) != "22" ];then 
+if [ $(echo $?) = "22" ];then 
 	shopt -s extglob;
 	rm -rf !(.env|docker-compose.yml|*.sh|.git|.|..);
 fi
