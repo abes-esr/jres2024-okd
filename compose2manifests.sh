@@ -293,6 +293,18 @@ if [ $(echo $?) = "0" ] ; then echo "...OK"; else echo "echec!!!"; exit 1;fi
 fi
 
 cat $CLEANED 
+echo "\n"
+
+# Patch *.txt file to remove '\n' character based in 64
+patch_secret () {
+	for i in $(ls *secret*); \
+		do  \
+			echo "Patching $1..."; 
+			cat $1 | yq eval -ojson \
+				   | jq -r '.data|=with_entries(.value |=(@base64d|sub("\n";"")|@base64))' \
+				   | sponge $1; \
+		done
+}
 
 if [ -n "$4" ] && [ "$4" = "kompose" ]; then
 	# 6> génération des manifests
@@ -300,28 +312,13 @@ if [ -n "$4" ] && [ "$4" = "kompose" ]; then
 	if [ -n "$5" ] && [ "$5" = "helm" ]; then  
 		kompose -f $CLEANED convert -c
 		cd $NAME/templates
-		for i in $(ls *secret*); \
-		do  \
-			echo "Patching $i..."; 
-			cat $i | yq eval -ojson \
-				   | jq -r '.data|=with_entries(.value |=(@base64d|sub("\n";"")|@base64))' \
-				   | sponge $i; \
+		patch_secret $i
 		done
 	else
 		kompose -f $CLEANED convert
-		for i in $(ls *secret*); \
-		do  \
-			echo "Patching $i..."; 
-			cat $i | yq eval -ojson \
-				   | jq -r '.data|=with_entries(.value |=(@base64d|sub("\n";"")|@base64))' \
-				   | sponge $i; \
-		done
-
+		patch_secret $i
 	fi
 fi
-
-# 6> Patch *.txt file to remove '\n' character based in 64
-# for i in $(ls *secret*); do echo $i; cat $i | yq eval -ojson | jq -r '.data|=with_entries(.value |=(@base64d|sub("\n";"")|@base64))' | sponge $i; done
 
 echo -e "\nYou are ready to deploy $NAME application into OKD\n"
 case $1 in
