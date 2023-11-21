@@ -299,10 +299,10 @@ echo "\n"
 patch_secret () {
 	for i in $(ls *secret*); \
 		do  \
-			echo "Patching $1..."; 
-			cat $1 | yq eval -ojson \
+			echo "Patching $i..."; 
+			cat $i | yq eval -ojson \
 				   | jq -r '.data|=with_entries(.value |=(@base64d|sub("\n";"")|@base64))' \
-				   | sponge $1; \
+				   | sponge $i; \
 		done
 }
 
@@ -312,10 +312,10 @@ if [ -n "$4" ] && [ "$4" = "kompose" ]; then
 	if [ -n "$5" ] && [ "$5" = "helm" ]; then  
 		kompose -f $CLEANED convert -c
 		cd $NAME/templates
-		patch_secret $i
+		patch_secret
 	else
 		kompose -f $CLEANED convert
-		patch_secret $i
+		patch_secret
 	fi
 fi
 
