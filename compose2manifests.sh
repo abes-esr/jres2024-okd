@@ -93,16 +93,16 @@ install_bin () {
 
 for i in jq yq docker-compose kompose; do install_bin $i; done
 
-echo -e "\"
+echo -e "\n"
 
 echo "ETAPE 3: Téléchargement du docker-compose"
 
 if [[ "$1" == "prod" ]] || [[ "$1" == "test" ]] || [[ "$1" == "dev" ]]; then
 		echo "##### Avertissement! #######################"
 		echo "Il faut que clé ssh valide sur tous les diplotaxis{} pour continuer...."
-		echo "Continuer? (yes/no)"
+		echo "Continuer? (y/n)"
 		read continue
-		if [[ "$continue" != "yes" ]]; then 
+		if [[ "$continue" != "y" ]]; then 
 			echo "Please re-execute the script after having installed your ssh pub keys on diplotaxis{}-${1}"
 			exit 1;
 		fi
@@ -223,7 +223,7 @@ if [ -n "$3" ]; then
 			for i in $(echo $PAIR_LIST); \
 				do export KEY=$(echo $i| cut -d':' -f1); \
 				export service=$(echo $i| cut -d':' -f2-); \
-				cat $CLEANED | yq eval - -o json| jq --arg toto "$service" --arg tata "$KEY|tr [:upper:] [:lower:]" '.services[$toto].secrets |= . + [$tata]' \
+				cat $CLEANED | yq eval - -o json| jq --arg toto "$service" --arg tata "$KEY" '.services[$toto].secrets |= . + [$tata|ascii_downcase|gsub("_";"-")]' \
 					| yq eval - -P | sponge $CLEANED; \
 				done
 			message
@@ -232,11 +232,11 @@ if [ -n "$3" ]; then
 			export var=$(echo $FILTER_LIST | jq  -r '.[].value.key') \
 			# export data=$(echo $FILTER_LIST | jq  -r '.[].value.value') \
 			for i in $(echo $var); \
-			do export data=$(echo $FILTER_LIST | jq --arg tata "$i" -r '[.[].value | select(.key==$tata).value]|first')
-				echo $data > $i.txt; \
+			do export data=$(echo $FILTER_LIST | jq --arg tata "$i" -r '[.[].value | select(.key==$tata).value]|first|ascii_downcase|gsub("_";"-")')
+				echo $data > $(echo $i| sed 's/_/-/g' | tr '[:upper:]' '[:lower:]').txt; \
 				cat $CLEANED \
 				| yq eval - -o json \
-				| jq --arg toto $i '.secrets[$toto].file = $toto + ".txt"' \
+				| jq --arg toto $i '.secrets[$toto|ascii_downcase|gsub("_";"-")].file = ($toto|ascii_downcase|gsub("_";"-")) + ".txt"' \
 				| yq eval - -P \
 				| sponge $CLEANED; \
 			done
