@@ -251,11 +251,22 @@ if [ -n "$3" ]; then
 			do 	cat $CLEANED | \
 				yq eval - -o json |\
 				jq -r --arg var "$i" '.services[$var].environment' | \
-				egrep -v 'KEY|PASSWORD' | \
+				# egrep -v 'KEY|PASSWORD' | \
 				yq eval - -P| \
 				sed "s/:\ /=/g" > $i.env; 
 			done
 		message
+
+		# 4> Déclaration des variables contenant un secret dans le env_file
+		for i in $(ls *.env); 
+			do 
+				for j in $(cat $i | egrep '(KEY|PASSWORD)'); 
+					do 
+						KEY=$(echo $j | cut -d"=" -f1);
+						LINE=$(echo $KEY | cut -d"=" -f1 | tr '[:upper:]' '[:lower:]' | sed 's/_/-/g');
+						sed "s/.*$KEY.*/$KEY=\/run\/secrets\/$LINE/g" $i;
+					done; 
+			done 
 
 		# 4> Déclaration des {services.env} dans docker-compose.yml
 		echo -e "4> #################### Déclaration des {services.env} ####################\n"
@@ -307,6 +318,7 @@ patch_secret () {
 			echo "Patching $i..."; 
 			cat $i | yq eval -ojson \
 				   | jq -r '.data|=with_entries(.value |=(@base64d|sub("\n";"")|@base64))' \
+				   | yq eval - -P \
 				   | sponge $i; \
 		done
 }
