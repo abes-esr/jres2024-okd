@@ -299,14 +299,37 @@ if [ -n "$4" ] && [ "$4" = "kompose" ]; then
 	echo -e "6> #################### génération des manifests ####################\n"
 	if [ -n "$5" ] && [ "$5" = "helm" ]; then  
 		kompose -f $CLEANED convert -c
+		cd $NAME
+		for i in $(ls *secret*); \
+		do  \
+			echo $i; 
+			cat $i | yq eval -ojson \
+				   | jq -r '.data|=with_entries(.value |=(@base64d|sub("\n";"")|@base64))' \
+				   | sponge $i; \
+		done
 	else
 		kompose -f $CLEANED convert
+		for i in $(ls *secret*); \
+		do  \
+			echo $i; 
+			cat $i | yq eval -ojson \
+				   | jq -r '.data|=with_entries(.value |=(@base64d|sub("\n";"")|@base64))' \
+				   | sponge $i; \
+		done
+
 	fi
 fi
+
+# 6> Patch *.txt file to remove '\n' character based in 64
+# for i in $(ls *secret*); do echo $i; cat $i | yq eval -ojson | jq -r '.data|=with_entries(.value |=(@base64d|sub("\n";"")|@base64))' | sponge $i; done
 
 echo -e "\nYou are ready to deploy $NAME application into OKD\n"
 case $1 in
 	local) echo "Chose your OKD environment and run \'oc apply -f \"*.yaml\"\'\n";;
 	*) echo "Connect to your $1 OKD environment and run \'oc apply -f \"*.yaml\"\'\n";;
 esac
+
+# cat qualimarc.yml | yq eval -ojson| jq -r '.services|to_entries[]|select(.key=="qualimarc-db-dumper")|.value.volumes|map(.source)|flatten[]'
+# cat qualimarc.yml | yq eval -ojson| jq -r '.services|to_entries[]|select(.key=="qualimarc-db-dumper")|.value.volumes|map(.target)|flatten[]'
+
 
