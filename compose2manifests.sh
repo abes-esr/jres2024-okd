@@ -163,10 +163,19 @@ echo "############################################"
 
 echo "ETAPE 2: Conversion du  en manifests Kubernetes"
 
+message () {
+	if [ $(echo $?) = "0" ]; 
+		then 
+			echo "...OK"; 
+		else echo "echec!!!"; 
+		exit 1;
+	fi 
+}
+
 # 1> Résolution du .env
 echo -e "1> #################### Résolution du .env ####################\n"
 docker-compose config > $NAME.yml
-if [ $(echo $?) = "0" ] ; then echo "...OK"; else echo "echec!!!"; exit 1;fi 
+message
 # 2> Conversion initiale du docker-compose.yml
 echo -e "2> #################### Conversion initiale du $NAME.yml ####################\n"
 docker-compose -f $NAME.yml convert --format json \
@@ -180,7 +189,7 @@ docker-compose -f $NAME.yml convert --format json \
 | jq 'del (.services[].mem_limit)'\
 | docker-compose -f - convert | sponge $NAME.yml
 
-if [ $(echo $?) = "0" ] ; then echo "...OK"; else echo "echec!!!"; exit 1;fi 
+message
 
 #### NBT 231108
 #### insertion de la clé "secrets" dans chacun des services de docker-compose.yml
@@ -198,13 +207,13 @@ if [ -n "$3" ]; then
 			# SMALL_LIST=$(cat $CLEANED | yq eval - -o json | jq '[.services[]|  {(.container_name): .environment}]') 
 			SMALL_LIST=$(cat $CLEANED | yq eval - -o json | jq '.services|to_entries[] | {(.key): .value.environment}'| jq -s)
 			#echo $SMALL_LIST| yq eval -P
-			if [ $(echo $?) = "0" ] ; then echo "...OK"; else echo "echec!!!"; exit 1;fi 
+			message
 
 			###### select variable name filtering by KEY or PASSWORD ####
 			FILTER_LIST=$(echo $SMALL_LIST | yq eval - -o json \
 							| jq '.[]|to_entries[]|try {key:.key,value:.value|to_entries[]} | select(.value.key | test("KEY|PASSWORD"))' \
 							| jq -s )
-			if [ $(echo $?) = "0" ] ; then echo "...OK"; else echo "echec!!!"; exit 1;fi 
+			message
 
 			###### obtention d une paire KEY:services #######
 			PAIR_LIST=$(for i in $(echo $FILTER_LIST | jq -r '.[].value.key' ); \
@@ -212,7 +221,7 @@ if [ -n "$3" ]; then
 						for j in $tata; do echo "$i:$j"; \
 								done; \
 					done | sort -u )
-			if [ $(echo $?) = "0" ] ; then echo "...OK"; else echo "echec!!!"; exit 1;fi 
+			message
 
 			###### Injection dans le json #####
 			for i in $(echo $PAIR_LIST); \
@@ -221,7 +230,7 @@ if [ -n "$3" ]; then
 				cat $CLEANED | yq eval - -o json| jq --arg toto "$service" --arg tata "$KEY" '.services[$toto].secrets |= . + [$tata]' \
 					| yq eval - -P | sponge $CLEANED; \
 				done
-			if [ $(echo $?) = "0" ] ; then echo "...OK"; else echo "echec!!!"; exit 1;fi 
+			message
 		
 			###### Generating secret files from .env file  #####
 			export var=$(echo $FILTER_LIST | jq  -r '.[].value.key') \
@@ -235,7 +244,7 @@ if [ -n "$3" ]; then
 				| yq eval - -P \
 				| sponge $CLEANED; \
 			done
-			if [ $(echo $?) = "0" ] ; then echo "...OK"; else echo "echec!!!"; exit 1;fi 
+			message
 		fi
 
 		########### Conversion du environment en env_file ############
@@ -250,7 +259,7 @@ if [ -n "$3" ]; then
 				yq eval - -P| \
 				sed "s/:\ /=/g" > $i.env; 
 			done
-		if [ $(echo $?) = "0" ] ; then echo "...OK"; else echo "echec!!!"; exit 1;fi 
+		message
 
 		# 4> Déclaration des {services.env} dans docker-compose.yml
 		echo -e "4> #################### Déclaration des {services.env} ####################\n"
@@ -260,7 +269,7 @@ if [ -n "$3" ]; then
 						jq -r  --arg var "$i" '.services[$var]."env_file" = $var +".env"' | \
 						sponge $CLEANED ; \
 			done
-		if [ $(echo $?) = "0" ] ; then echo "...OK"; else echo "echec!!!"; exit 1;fi 
+		message
 		echo -e "\n"
 
 
@@ -274,7 +283,7 @@ if [ -n "$3" ]; then
 	| jq 'del(.services[].labels."com.centurylinklabs.watchtower.scope")' \
 	| yq eval - -P | sponge $CLEANED
 
-if [ $(echo $?) = "0" ] ; then echo "...OK"; else echo "echec!!!"; exit 1;fi 
+message
 	fi
 
 else
@@ -289,7 +298,7 @@ cat $CLEANED \
 | yq eval - -P | sponge $CLEANED
 
 echo -e "\n"
-if [ $(echo $?) = "0" ] ; then echo "...OK"; else echo "echec!!!"; exit 1;fi 
+message
 fi
 
 cat $CLEANED 
