@@ -38,13 +38,18 @@ echo "###########################################"
 echo "ETAPE 1: Initialisation du projet..."
 echo "1> Nettoyage..."
 if [ -f ./okd ];then rm -rf okd; fi
-shopt -s extglob
-rm -rf !(.env|docker-compose.yml|*.sh|.git|.|..)
+if [[ "$?" != 2]]; 
+	then 
+		shopt -s extglob
+		rm -rf !(.env|docker-compose.yml|*.sh|.git|.|..)
+fi
+
 echo -e "\n"
 
-if [ "$3" = "clean" ]; then
-	echo "Cleaned Wordir";
-	exit;
+if [ "$3" = "clean" ]; 
+	then
+		echo "Cleaned Wordir";
+		exit;
 fi
 
 echo -e "\n"
@@ -134,7 +139,7 @@ elif [[ "$1" == local ]];then
 				fi
 			else
 				echo "You may manually copy your \"docker-compose.yml\" and \".env\" file into $pwd"
-				exit 1
+				exit 2
 			fi
 		fi
 		if ! [[ -f .env ]];then
