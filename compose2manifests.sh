@@ -40,8 +40,8 @@ echo "1> Nettoyage..."
 if [ -f ./okd ];then rm -rf okd; fi
 if [ $(echo $?) != "22" ]; 
 	then 
-		shopt -s extglob;
-		rm -rf !(.env|docker-compose.yml|*.sh|.git|.|..);
+		echo "rmrmrmrm"
+		shopt -s extglob && rm -rf !(.env|docker-compose.yml|*.sh|.git|.|..);
 fi
 
 echo -e "\n"
