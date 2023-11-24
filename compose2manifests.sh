@@ -337,7 +337,7 @@ patch_secretKeys () {
 					then .valueFrom
 						|= with_entries(.key="secretKeyRef"
 							|.value.name=(.value.key|ascii_downcase|gsub("_";"-"))
-							|.value.key|=(ascii_downcase|sub("_";"-"))
+							|.value.key|=(ascii_downcase|gsub("_";"-"))
 							)
 					else .
 					end
