@@ -324,7 +324,7 @@ patch_secret () {
 }
 
 # Patch secretKeys
-patch_secretKeys () {}
+patch_secretKeys () {
 	for i in $(ls *deployment*); 
 		do 
 			cat $i| yq eval -ojson| jq 
