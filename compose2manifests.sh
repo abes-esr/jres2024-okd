@@ -315,7 +315,7 @@ echo -e "\n"
 patch_secret () {
 	for i in $(ls *secret*yaml); \
 		do  \
-			echo "Patching $i..."; 
+			echo "Patching $i ..."; 
 			cat $i | yq eval -ojson \
 				   | jq -r '.data|=with_entries(.value |=(@base64d|sub("\n";"")|@base64))' \
 				   | yq eval - -P \
@@ -327,8 +327,9 @@ patch_secret () {
 patch_secretKeys () {
 	for i in $(ls *deployment*); 
 		do 
-			cat $i| yq eval -ojson| jq 
-			'.spec.template.spec.containers
+			echo "patching $i ..."
+			cat $i| yq eval -ojson |
+			jq '.spec.template.spec.containers
 			|= map(
 				(.env
 				|= map(
@@ -342,7 +343,8 @@ patch_secretKeys () {
 					end
 					)
 				)? // .
-			)'
+			)' |
+			yq eval -P | sponge $i;
 		done
 }
 
