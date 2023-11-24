@@ -323,6 +323,29 @@ patch_secret () {
 		done
 }
 
+# Patch secretKeys
+patch_secretKeys () {}
+	for i in $(ls *deployment*); 
+		do 
+			cat $i| yq eval -ojson| jq 
+			'.spec.template.spec.containers
+			|= map(
+				(.env
+				|= map(
+					if (.name|test("SECRET|PASSWORD|KEY"))
+					then .valueFrom
+						|= with_entries(.key="secretKeyRef"
+							|.value.name=(.value.key|ascii_downcase|gsub("_";"-"))
+							|.value.key|=(ascii_downcase|sub("_";"-"))
+							)
+					else .
+					end
+					)
+				)? // .
+			)'
+		done
+}
+
 if [ -n "$4" ] && [ "$4" = "kompose" ]; then
 	# 6> génération des manifests
 	echo -e "6> #################### génération des manifests ####################\n"
@@ -330,11 +353,16 @@ if [ -n "$4" ] && [ "$4" = "kompose" ]; then
 		kompose -f $CLEANED convert -c
 		cd $NAME/templates
 		patch_secret
+		patch_secretKeys
 	else
 		kompose -f $CLEANED convert
 		patch_secret
+		patch_secretKeys
 	fi
 fi
+
+
+
 
 echo -e "\nYou are ready to deploy $NAME application into OKD\n"
 case $1 in
