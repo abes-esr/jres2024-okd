@@ -353,6 +353,15 @@ patch_secretKeys () {
 		done
 }
 
+# Patch networkpolicy to allow ingress
+patch_networkPolicy () {
+cat $NAME-docker-$1-default-networkpolicy.yaml | 
+	yq eval -ojson | 
+	jq '.spec.ingress|=
+			map(.from |= .+ [{"namespaceSelector":{"matchLabels":{ "policy-group.network.openshift.io/ingress": ""}}}])'|
+	yq eval -P | sponge $NAME-docker-$1-default-networkpolicy.yaml
+}
+
 # 6> génération des manifests
 
 if [ -n "$4" ] && [ "$4" = "kompose" ]; then
@@ -362,10 +371,12 @@ if [ -n "$4" ] && [ "$4" = "kompose" ]; then
 		cd $NAME/templates
 		patch_secret
 		patch_secretKeys
+		patch_networkPolicy
 	else
 		kompose -f $CLEANED convert
 		patch_secret
 		patch_secretKeys
+		patch_networkPolicy
 	fi
 fi
 
