@@ -61,6 +61,11 @@ install_bin () {
                         BIN="docker/compose/releases/latest/download/docker-compose-linux-x86_64";;
                 kompose)
                         BIN="kubernetes/kompose/releases/latest/download/kompose-linux-amd64";;
+				oc)
+						wget -q okd-project/okd/releases/download/4.12.0-0.okd-2023-02-18-033438/openshift-client-linux-4.12.0-0.okd-2023-02-18-033438.tar.gz \
+							 -O /usr/local/bin/ | \
+						tar xzf -
+						chmod +x {kubectl,oc};;
                 *)
                 ;;
         esac
@@ -91,7 +96,7 @@ install_bin () {
   esac
 }
 
-for i in jq yq docker-compose kompose; do install_bin $i; done
+for i in jq yq docker-compose kompose oc; do install_bin $i; done
 
 echo -e "\n"
 
@@ -99,7 +104,7 @@ echo "ETAPE 3: Téléchargement du docker-compose"
 
 if [[ "$1" == "prod" ]] || [[ "$1" == "test" ]] || [[ "$1" == "dev" ]]; then
 		echo "##### Avertissement! #######################"
-		echo "Il faut que clé ssh valide sur tous les diplotaxis{} pour continuer...."
+		echo "Il faut que clé ssh valide sur tous les comptes root des diplotaxis{}-${1} pour continuer...."
 		echo "Continuer? (y/n)"
 		read continue
 		if [[ "$continue" != "y" ]]; then 
@@ -108,14 +113,14 @@ if [[ "$1" == "prod" ]] || [[ "$1" == "test" ]] || [[ "$1" == "dev" ]]; then
 		fi
 		echo "Ok, let's go on!"
 		diplo=$(for i in {1..6}; \
-		do ssh root@diplotaxis$i-${1} docker ps --format json | jq --arg toto "diplotaxis${i}-${1}" '{diplotaxis: ($toto), nom: .Names}'; \
+		do ssh root@diplotaxis$i-${1}.v106.abes.fr docker ps --format json | jq --arg toto "diplotaxis${i}-${1}" '{diplotaxis: ($toto), nom: .Names}'; \
 		done \
 		| jq -rs --arg var "$2" '.[] | select(.nom | test("\($var)-watchtower"))| .diplotaxis'); \
 		mkdir $2-docker-${1} && cd $2-docker-${1}; \
 		echo "Getting docker-compose.file from GitHub";  \
 		wget -N https://raw.githubusercontent.com/abes-esr/$2-docker/develop/docker-compose.yml 2> /dev/null; \
 		echo $PWD; \
-		rsync -av root@$diplo:/opt/pod/$2-docker/.env .; \
+		rsync -av root@$diplo.v106.abes.fr:/opt/pod/$2-docker/.env .; \
 elif [[ "$1" == local ]];then
 		if ! [[ -f ./docker-compose.yml ]]; then
 			echo "If $2 is hosted on gitlab.abes.fr, you can download your docker-compose.yml (y/n)?"
@@ -348,8 +353,9 @@ patch_secretKeys () {
 		done
 }
 
+# 6> génération des manifests
+
 if [ -n "$4" ] && [ "$4" = "kompose" ]; then
-	# 6> génération des manifests
 	echo -e "6> #################### génération des manifests ####################\n"
 	if [ -n "$5" ] && [ "$5" = "helm" ]; then  
 		kompose -f $CLEANED convert -c
@@ -363,16 +369,187 @@ if [ -n "$4" ] && [ "$4" = "kompose" ]; then
 	fi
 fi
 
+# 7> Calcul des tailles des disques persistants
+
+SOURCES=$(for i in $(cat $NAME.yml | yq eval -ojson| 
+                                    jq -r '.services|to_entries[] |
+                                                     select(.value.volumes|
+                                                     to_entries[]|
+                                                     .value.source|
+                                                     test("applis")|not)?|
+                                                     .value.volumes|map(.source)[]'); 
+                do 
+                    SERVICE=$(cat item.yml | yq eval -ojson| 
+                                            jq -r --arg service "$i" '.services|to_entries[] |
+                                                                select(.value.volumes | 
+                                                                to_entries[] |
+                                                                .value.source | 
+                                                                test("\($service)"))? |
+                                                                .key')
+                    REP=$(pwd); 
+                    if [[ $(echo "$i"|grep $REP) != '' ]];
+                    then
+                        echo $SERVICE:$(echo $i | awk -F"$REP" '{print $2}'); 
+                    else 
+                        echo $SERVICE:$i; 
+                    fi; 
+                done)
+echo $SOURCES
+
+index=0
+declare -a tab1
+declare -a tab2
+declare -a tab3
+for i in $SOURCES; 
+    do 
+        SVC=$(echo $i | cut -d':' -f1)
+        SRC=$(echo $i | cut -d':' -f2)
+        index=$(($index + 1))
+        # if [[ ! -d volume_$SVC ]]
+        #     then 
+        #         mkdir volume_$SVC
+        # fi
+        # if [[ $(echo $i|grep "/volumes") != '' ]]
+        #     then 
+        #         sshfs root@diplotaxis4-prod:/opt/pod/item-docker/$SRC volume_$SVC 2> /dev/null
+        # else 
+        #     sshfs root@diplotaxis4-prod:/$SRC volume_$SVC 2> /dev/null
+        # fi
+        if [[  $(echo $SRC |grep "/volumes") != '' ]]
+            then
+                src="/opt/pod/${NAME}-docker/${SRC}"
+            else
+                src=$SRC
+        fi
+        # echo "Calculating needed size for disk claiming..." 
+        # tab1[$index]=$(du -s volume_${SVC} | cut -f1) 
+        tab1[$index]=$(ssh root@${diplo} du -s $src | cut -f1) 
+        echo $SVC:${tab1[$index]}
+        tab2[$index]=$(printf %.0f $(echo "${tab1[$index]} / (1024*1024) +1 "|bc -l) 2> /dev/null) 
+        echo $SVC:${tab2[$index]}
+        tab3[$index]=$(cat item.yml | yq eval -ojson| 
+                       jq -r --arg size "${tab2[$index]}" --arg svc "$SVC" --arg src "$SRC" '.services
+                       |to_entries[] | select(.value.volumes | to_entries[] |.value.source | 
+                            test("\($src)"))?|.value.volumes|=
+                                map(.|=with_entries(select(.key="source"))|.source="\($src)"|.size="\($size)Gi")')
+        echo "${tab3[*]}"      
+        echo -e "\n"
+    done
+# echo "${tab3[*]}"|jq -s
+
+# Change size of volumeclaim yaml declaration
+for i in "${tab3[@]}"; 
+    do 
+        size=$(echo $i | jq -r '.value.volumes[].size');  
+        service=$(echo $i | jq -r '.key'); 
+        index=$(echo $i | jq -r --arg size "$size" '.value.volumes[].size|index("\($size)")'); 
+        cat $service-claim$index-persistentvolumeclaim.yaml | 
+            yq eval -ojson| 
+            jq --arg size "$size" '.spec.resources.requests.storage=$size'|
+            yq eval -P |
+        sponge $service-claim$index-persistentvolumeclaim.yaml 
+    done
+
+copy_to_okd () {
+echo "Would you like to copy current data to okd volume (may be long)? (y/n)"
+read answer
+if [[ "$answer" = "y" ]];
+    then
+        for i in "${tab3[@]}"; 
+            do 
+                service=$(echo $i | jq -r '.key')
+                target=$(echo $i | jq -r '.value.volumes[].target')
+                source=$(echo $i | jq -r '.value.volumes[].source')
+                private_key=$(cat ~/.ssh/id_rsa)
+                # if [[ "$(echo $source| grep backup)" = '' ]];
+                if [[  $(echo $source |grep "/volumes") != '' ]]
+                    then
+                        src="/opt/pod/${NAME}-docker/${source}"
+                    else
+                        src=$source
+                fi
+                size=$(echo $i | jq -r '.value.volumes[].size')
+                echo "###########################################################################"
+                echo -e "$service:\n Type those commands to copy data to persistent volume ($size): \n"
+                echo "mkdir /root/.ssh && echo \"$private_key\" > /root/.ssh/id_rsa && chmod 600 -R /root/.ssh; \
+if [ \"\$(cat /etc/os-release|grep "alpine")\" = '' ]; \
+then apt update && apt install rsync openssh-client -y;  \
+else apk update && apk add rsync openssh-client-default; fi; \
+rsync -av -e 'ssh -o StrictHostKeyChecking=no' ${diplo}.v106.abes.fr:${src}/ ${target}/"
+                echo "###########################################################################"
+                POD=$(oc get pods -o json| jq -r --arg service "$service" '.items[]|.metadata|select(.name|test("\($service)-[0-9]"))|.name'|tail -n1)
+                oc debug $POD
+                sleep 5
+                # echo "oc rsync --progress=true ./volume_${service} $POD-debug:${target} --strategy=tar"
+                # oc rsync --progress=true ./volume_${service} $POD-debug:${target}
+            done
+fi
+}
+
+# 8> Déploiement de l'application
+
+# echo -e "\nYou are ready to deploy $NAME application into OKD\n"
+# case $1 in
+# 	local) echo "Chose your OKD environment and run \'oc apply -f \"*.yaml\"\'\n";;
+# 	*) echo -e "Connect to your $1 OKD environment and run: \n
+# 	   cd $name-docker-$1 && \'oc apply -f \"*.yaml\"\'\n";;
+# esac
+
+echo "You can continue to automatically deploy your application... (y/n)"
+read answer
+
+if [[ $answer != "y" ]]
+	then
+		exit 1
+fi
+
+echo "Would you like to deploy $NAME on OKD?(y/n)"
+read answer
+if [[ "$answer" = "y" ]]; 
+    then
+        OKD=$(oc project 2>&1 >/dev/null)
+        echo $OKD
+        if [[ $(echo $OKD| grep "Unauthorized") != '' ]]
+            then
+                echo "First connect to your OKD cluster with \"export KUBECONFIG=path_to_kubeconfig\" and reexecute the script"
+                exit 1
+            else
+                echo "Would you like to create a new project?(y/n)"
+                read answer
+                if [[ "$answer" == "y" ]];
+                    then
+                        echo "Enter the name of the project"
+                        read project
+                        oc new-project $project
+                        echo "Setting SCC anyuid to default SA"
+                        oc adm policy add-scc-to-user anyuid -z default
+                        echo "Creation of docker secret for pulling images without restriction"
+                        oc create secret docker-registry docker.io --docker-server=docker.io --docker-username=***REMOVED*** --docker-password=***REMOVED***
+                        oc secrets link default docker.io --for=pull
+                fi
+                echo "Ready to deploy $name. Press \"Enter\" to begin"
+                read answer
+                oc apply -f "*.yaml*"
+                oc get pods -w
+                copy_to_okd
+        fi
+    else
+        copy_to_okd
+fi
+
+# 9> Redémarrage des pods et URL de connexion
+
+echo "Restart all $NAME pods" 
+oc rollout restart deploy
+oc get pods -w
+oc expose svc $NAME-front
+URL=$(oc get route -o json | jq --arg NAME "$NAME" -r '.items[]|.spec|select(.host|test("\($NAME)-front"))|.host')
+echo -e "You can reach $NAME application at:\n"
+echo $URL
 
 
 
-echo -e "\nYou are ready to deploy $NAME application into OKD\n"
-case $1 in
-	local) echo "Chose your OKD environment and run \'oc apply -f \"*.yaml\"\'\n";;
-	*) echo "Connect to your $1 OKD environment and run \'oc apply -f \"*.yaml\"\'\n";;
-esac
 
-# cat qualimarc.yml | yq eval -ojson| jq -r '.services|to_entries[]|select(.key=="qualimarc-db-dumper")|.value.volumes|map(.source)|flatten[]'
-# cat qualimarc.yml | yq eval -ojson| jq -r '.services|to_entries[]|select(.key=="qualimarc-db-dumper")|.value.volumes|map(.target)|flatten[]'
+
 
 
