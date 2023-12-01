@@ -36,7 +36,7 @@ esac
 
 echo "###########################################"
 echo "ETAPE 1: Initialisation du projet..."
-echo "1> Nettoyage..."
+echo "1> Nettoyage........................................"
 if [ -f ./okd ];then rm -rf okd; fi
 shopt -s extglob
 rm -rf !(.env|docker-compose.yml|*.sh|.git|.|..)
@@ -69,11 +69,11 @@ install_bin () {
                 *)
                 ;;
         esac
-        echo "Installing $1..."
+        echo "Installing $1......................................."
         sudo wget -q https://github.com/${BIN} -O /usr/local/bin/$1 &&  sudo  chmod +x /usr/local/bin/$1
   fi
   if ! [ -f /usr/bin/sponge ];then
-                echo "Installing sponge..."
+                echo "Installing sponge......................................."
                 case $(cat /etc/os-release | grep ID_LIKE) in \
         *debian*) \
                 apt install moreutils -y;; \
@@ -104,7 +104,7 @@ echo "ETAPE 3: Téléchargement du docker-compose"
 
 if [[ "$1" == "prod" ]] || [[ "$1" == "test" ]] || [[ "$1" == "dev" ]]; then
 		echo "##### Avertissement! #######################"
-		echo "Il faut que clé ssh valide sur tous les comptes root des diplotaxis{}-${1} pour continuer...."
+		echo "Il faut que clé ssh valide sur tous les comptes root des diplotaxis{}-${1} pour continuer......................................."
 		echo "Continuer? (y/n)"
 		read continue
 		if [[ "$continue" != "y" ]]; then 
@@ -116,17 +116,18 @@ if [[ "$1" == "prod" ]] || [[ "$1" == "test" ]] || [[ "$1" == "dev" ]]; then
 		do ssh root@diplotaxis$i-${1}.v106.abes.fr docker ps --format json | jq --arg toto "diplotaxis${i}-${1}" '{diplotaxis: ($toto), nom: .Names}'; \
 		done \
 		| jq -rs --arg var "$2" '.[] | select(.nom | test("\($var)-watchtower"))| .diplotaxis'); \
+		echo -e "$NAME is running on $diplo\n"
 		mkdir $2-docker-${1} && cd $2-docker-${1}; \
-		echo "Getting docker-compose.file from GitHub";  \
+		echo "Getting docker-compose.file from GitHub.......................................";  \
 		wget -N https://raw.githubusercontent.com/abes-esr/$2-docker/develop/docker-compose.yml 2> /dev/null; \
 		echo $PWD; \
 		rsync -av root@$diplo.v106.abes.fr:/opt/pod/$2-docker/.env .; \
 elif [[ "$1" == local ]];then
 		if ! [[ -f ./docker-compose.yml ]]; then
-			echo "If $2 is hosted on gitlab.abes.fr, you can download your docker-compose.yml (y/n)?"
+			echo "If $2 is hosted on gitlab.abes.fr, you can download your docker-compose.yml (y/n).......................................?"
 			read rep
 			if [[ "$rep" == "y" ]];then
-				echo "Please provide your gitlab private token (leave empty if public repo)"
+				echo "Please provide your gitlab private token (leave empty if public repo)......................................."
 				read token
 				ID=$(curl -s --header "PRIVATE-TOKEN: $token" https://git.abes.fr/api/v4/projects | \
 				jq -r --arg toto "$2" '.[] | select(.name==$toto)| .id')
@@ -199,7 +200,7 @@ echo -e "\n"
 CLEANED="$NAME.yml"
 
 if [ -n "$3" ]; then
-		echo "on continue"
+		echo -e "on continue......................................."
 	if [ "$3" == 'secret' ] || [ "$3" == 'env_file' ]; then
 
 		if [ "$3" = "secret" ]; then
@@ -320,7 +321,7 @@ echo -e "\n"
 patch_secret () {
 	for i in $(ls *secret*yaml); \
 		do  \
-			echo "Patching $i ..."; 
+			echo "Patching $i......................................."; 
 			cat $i | yq eval -ojson \
 				   | jq -r '.data|=with_entries(.value |=(@base64d|sub("\n";"")|@base64))' \
 				   | yq eval - -P \
@@ -332,7 +333,7 @@ patch_secret () {
 patch_secretKeys () {
 	for i in $(ls *deployment*); 
 		do 
-			echo "patching $i ..."
+			echo "patching $i......................................."
 			cat $i| yq eval -ojson |
 			jq '.spec.template.spec.containers
 			|= map(
@@ -376,7 +377,7 @@ if [ -n "$4" ] && [ "$4" = "kompose" ]; then
 		kompose -f $CLEANED convert
 		patch_secret
 		patch_secretKeys
-		patch_networkPolicy
+		patch_networkPolicy $1
 	fi
 fi
 
@@ -390,7 +391,7 @@ SOURCES=$(for i in $(cat $NAME.yml | yq eval -ojson|
                                                      test("applis")|not)?|
                                                      .value.volumes|map(.source)[]'); 
                 do 
-                    SERVICE=$(cat item.yml | yq eval -ojson| 
+                    SERVICE=$(cat $NAME.yml | yq eval -ojson| 
                                             jq -r --arg service "$i" '.services|to_entries[] |
                                                                 select(.value.volumes | 
                                                                 to_entries[] |
@@ -438,7 +439,7 @@ for i in $SOURCES;
         echo $SVC:${tab1[$index]}
         tab2[$index]=$(printf %.0f $(echo "${tab1[$index]} / (1024*1024) +1 "|bc -l) 2> /dev/null) 
         echo $SVC:${tab2[$index]}
-        tab3[$index]=$(cat item.yml | yq eval -ojson| 
+        tab3[$index]=$(cat $NAME.yml | yq eval -ojson| 
                        jq -r --arg size "${tab2[$index]}" --arg svc "$SVC" --arg src "$SRC" '.services
                        |to_entries[] | select(.value.volumes | to_entries[] |.value.source | 
                             test("\($src)"))?|.value.volumes|=
@@ -462,7 +463,7 @@ for i in "${tab3[@]}";
     done
 
 copy_to_okd () {
-echo "Would you like to copy current data to okd volume (may be long)? (y/n)"
+echo "Would you like to copy current data to okd volume (may be long)? (y/n)......................................."
 read answer
 if [[ "$answer" = "y" ]];
     then
@@ -481,7 +482,7 @@ if [[ "$answer" = "y" ]];
                 fi
                 size=$(echo $i | jq -r '.value.volumes[].size')
                 echo "###########################################################################"
-                echo -e "$service:\n Type those commands to copy data to persistent volume ($size): \n"
+                echo -e "$service:\n Type those commands to copy data to persistent volume ($size):....................................... \n"
                 echo "mkdir /root/.ssh && echo \"$private_key\" > /root/.ssh/id_rsa && chmod 600 -R /root/.ssh; \
 if [ \"\$(cat /etc/os-release|grep "alpine")\" = '' ]; \
 then apt update && apt install rsync openssh-client -y;  \
@@ -499,22 +500,17 @@ fi
 
 # 8> Déploiement de l'application
 
-# echo -e "\nYou are ready to deploy $NAME application into OKD\n"
-# case $1 in
-# 	local) echo "Chose your OKD environment and run \'oc apply -f \"*.yaml\"\'\n";;
-# 	*) echo -e "Connect to your $1 OKD environment and run: \n
-# 	   cd $name-docker-$1 && \'oc apply -f \"*.yaml\"\'\n";;
-# esac
+choice=$(
+case $1 in
+	local) echo -e "oc apply -f \"*.yaml\"\n";;
+	*) echo -e "cd $NAME-docker-$1 && \'oc apply -f \"*.yaml\"\'\n";;
+esac
+)
 
-echo "You can continue to automatically deploy your application... (y/n)"
-read answer
+echo -e "Would you like to deploy $NAME on OKD $1?......................................."
+echo -e "(You can alternatively do it later by manually entering: $choice)"
+echo "(y/n)"
 
-if [[ $answer != "y" ]]
-	then
-		exit 1
-fi
-
-echo "Would you like to deploy $NAME on OKD?(y/n)"
 read answer
 if [[ "$answer" = "y" ]]; 
     then
@@ -522,27 +518,31 @@ if [[ "$answer" = "y" ]];
         echo $OKD
         if [[ $(echo $OKD| grep "Unauthorized") != '' ]]
             then
-                echo "First connect to your OKD cluster with \"export KUBECONFIG=path_to_kubeconfig\" and reexecute the script"
+                echo "First connect to your OKD cluster with \"export KUBECONFIG=path_to_kubeconfig\" and reexecute the script..........................."
                 exit 1
             else
-                echo "Would you like to create a new project?(y/n)"
+                echo "Would you like to create a new project?(y/n)...................................."
                 read answer
                 if [[ "$answer" == "y" ]];
                     then
-                        echo "Enter the name of the project"
+                        echo "Enter the name of the project...................................."
                         read project
                         oc new-project $project
-                        echo "Setting SCC anyuid to default SA"
+                        echo -e "Setting SCC anyuid to default SA.......................................\n"
                         oc adm policy add-scc-to-user anyuid -z default
-                        echo "Creation of docker secret for pulling images without restriction"
+                        echo -e "Creation of docker secret for pulling images without restriction.......................................\n"
                         oc create secret docker-registry docker.io --docker-server=docker.io --docker-username=picabesesr --docker-password=SVmx2Puw3scbcb4J
                         oc secrets link default docker.io --for=pull
+						echo -e "\n"
                 fi
-                echo "Ready to deploy $name. Press \"Enter\" to begin"
+                echo "Ready to deploy $name. Press \"Enter\" to begin......................................."
                 read answer
                 oc apply -f "*.yaml*"
-                oc get pods -w
+				echo -e "\n"
+                oc get pods
+				echo -e "\n"
                 copy_to_okd
+				echo -e "\n"
         fi
     else
         copy_to_okd
@@ -550,13 +550,14 @@ fi
 
 # 9> Redémarrage des pods et URL de connexion
 
-echo "Restart all $NAME pods" 
+echo "Restart all $NAME pods......................................." 
 oc rollout restart deploy
 oc get pods -w
 oc expose svc $NAME-front
 URL=$(oc get route -o json | jq --arg NAME "$NAME" -r '.items[]|.spec|select(.host|test("\($NAME)-front"))|.host')
+echo -e "Congratulations"
 echo -e "You can reach $NAME application at:\n"
-echo $URL
+echo http://$URL
 
 
 
