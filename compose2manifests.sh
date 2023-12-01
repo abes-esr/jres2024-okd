@@ -314,7 +314,7 @@ echo -e "\n"
 message
 fi
 
-cat $CLEANED 
+cat $CLEANED
 echo -e "\n"
 
 # Patch *.txt file to remove '\n' character based in 64
@@ -355,34 +355,75 @@ patch_secretKeys () {
 }
 
 # Patch networkpolicy to allow ingress
-patch_networkPolicy () {
-cat $NAME-docker-$1-default-networkpolicy.yaml | 
-	yq eval -ojson | 
-	jq '.spec.ingress|=
-			map(.from |= .+ [{"namespaceSelector":{"matchLabels":{ "policy-group.network.openshift.io/ingress": ""}}}])'|
-	yq eval -P | sponge $NAME-docker-$1-default-networkpolicy.yaml
+	patch_networkPolicy () {
+	echo "patching $NAME-docker-$1-default-networkpolicy.yaml......................................."
+	cat $NAME-docker-$1-default-networkpolicy.yaml | 
+		yq eval -ojson | 
+		jq '.spec.ingress|=
+				map(.from |= .+ [{"namespaceSelector":{"matchLabels":{ "policy-group.network.openshift.io/ingress": ""}}}])'|
+		yq eval -P | sponge $NAME-docker-$1-default-networkpolicy.yaml
+}
+
+# Patch pvc pour /appli
+patch_pvc () {
+	index="-1"
+	for i in $applis_svc; 
+		do 
+			index=$((index +1))
+			echo "patching $i-claim$index-persistentvolumeclaim.yaml......................................."
+			cat $i-claim$index-persistentvolumeclaim.yaml | 
+				yq eval -ojson | 
+					jq --arg name "$NAME" --arg env "$1" '.spec.resources.requests.storage="8Ti"|.spec.volumeName="applis-\($name)-\($env)"|.spec.storageClassName=""|.spec.accessModes=["ReadWriteMany"]' |
+				yq eval -P | sponge $i-claim$index-persistentvolumeclaim.yaml
+		done
+}
+
+patch_pv_applis () {
+	if [[ $applis_svc != '' ]];
+		then
+			for i in $applis_svc;
+				do 
+					echo "patching $i-persistentvolume.yaml......................................."
+echo "apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: applis-$NAME-$1 
+spec:
+  capacity:
+    storage: 8Ti 
+  accessModes:
+  - ReadWriteMany
+  nfs: 
+    path: /mnt/EREBUS/zpool_data/statistiques/$NAME/$1/
+    server: erebus.v102.abes.fr 
+  persistentVolumeReclaimPolicy: Retain" > $i-persistentvolume.yaml
+				done
+	fi
 }
 
 # 6> génération des manifests
 
+applis_svc=$(cat $NAME.yml | yq eval -ojson | 
+	jq -r '.services|to_entries[]| [{services: .key, volumes: .value.volumes[]|select(.source|test("/appli"))}]?|.[].services')
 if [ -n "$4" ] && [ "$4" = "kompose" ]; then
 	echo -e "6> #################### génération des manifests ####################\n"
 	if [ -n "$5" ] && [ "$5" = "helm" ]; then  
 		kompose -f $CLEANED convert -c
 		cd $NAME/templates
-		patch_secret
-		patch_secretKeys
-		patch_networkPolicy
 	else
 		kompose -f $CLEANED convert
-		patch_secret
-		patch_secretKeys
-		patch_networkPolicy $1
 	fi
+	patch_secret
+	patch_secretKeys
+	patch_networkPolicy $1
+	patch_pv_applis $1
+	patch_pvc $1
+	echo -e "\n"
 fi
 
 # 7> Calcul des tailles des disques persistants
 
+echo "7>#################### Size calculation of persistent volumes ###################\n"
 SOURCES=$(for i in $(cat $NAME.yml | yq eval -ojson| 
                                     jq -r '.services|to_entries[] |
                                                      select(.value.volumes|
@@ -433,21 +474,20 @@ for i in $SOURCES;
             else
                 src=$SRC
         fi
-        # echo "Calculating needed size for disk claiming..." 
+        # echo "Calculating needed size for disk claiming......................." 
         # tab1[$index]=$(du -s volume_${SVC} | cut -f1) 
         tab1[$index]=$(ssh root@${diplo} du -s $src | cut -f1) 
-        echo $SVC:${tab1[$index]}
+        # echo $SVC:${tab1[$index]}
         tab2[$index]=$(printf %.0f $(echo "${tab1[$index]} / (1024*1024) +1 "|bc -l) 2> /dev/null) 
-        echo $SVC:${tab2[$index]}
+        # echo $SVC:${tab2[$index]}
         tab3[$index]=$(cat $NAME.yml | yq eval -ojson| 
                        jq -r --arg size "${tab2[$index]}" --arg svc "$SVC" --arg src "$SRC" '.services
                        |to_entries[] | select(.value.volumes | to_entries[] |.value.source | 
                             test("\($src)"))?|.value.volumes|=
                                 map(.|=with_entries(select(.key="source"))|.source="\($src)"|.size="\($size)Gi")')
-        echo "${tab3[*]}"      
+        # echo "${tab3[*]}"      
         echo -e "\n"
     done
-# echo "${tab3[*]}"|jq -s
 
 # Change size of volumeclaim yaml declaration
 for i in "${tab3[@]}"; 
@@ -487,7 +527,8 @@ if [[ "$answer" = "y" ]];
 if [ \"\$(cat /etc/os-release|grep "alpine")\" = '' ]; \
 then apt update && apt install rsync openssh-client -y;  \
 else apk update && apk add rsync openssh-client-default; fi; \
-rsync -av -e 'ssh -o StrictHostKeyChecking=no' ${diplo}.v106.abes.fr:${src}/ ${target}/"
+rsync -av -e 'ssh -o StrictHostKeyChecking=no' ${diplo}.v106.abes.fr:${src}/ ${target}/; \
+exit"
                 echo "###########################################################################"
                 POD=$(oc get pods -o json| jq -r --arg service "$service" '.items[]|.metadata|select(.name|test("\($service)-[0-9]"))|.name'|tail -n1)
                 oc debug $POD
@@ -500,6 +541,7 @@ fi
 
 # 8> Déploiement de l'application
 
+echo "8> ######################## Application Deployment #################################\n"
 choice=$(
 case $1 in
 	local) echo -e "oc apply -f \"*.yaml\"\n";;
@@ -533,6 +575,8 @@ if [[ "$answer" = "y" ]];
                         echo -e "Creation of docker secret for pulling images without restriction.......................................\n"
                         oc create secret docker-registry docker.io --docker-server=docker.io --docker-username=picabesesr --docker-password=SVmx2Puw3scbcb4J
                         oc secrets link default docker.io --for=pull
+						echo "Release pv applis-$NAME-$1..........................................................\n"
+						oc patch pv applis-$NAME-$1 -p '{"spec":{"claimRef": null}}'
 						echo -e "\n"
                 fi
                 echo "Ready to deploy $name. Press \"Enter\" to begin......................................."
@@ -550,6 +594,8 @@ fi
 
 # 9> Redémarrage des pods et URL de connexion
 
+echo "9>############################ Pods reload #######################"
+if [[ $answer != "y" ]]; then exit; fi
 echo "Restart all $NAME pods......................................." 
 oc rollout restart deploy
 oc get pods -w
