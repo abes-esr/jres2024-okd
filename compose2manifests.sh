@@ -60,7 +60,7 @@ install_bin () {
                 docker-compose)
                         BIN="docker/compose/releases/latest/download/docker-compose-linux-x86_64";;
                 kompose)
-                        BIN="kubernetes/kompose/releases/latest/download/kompose-linux-amd64";;
+                        BIN="kubernetes/kompose/releases/latest/1.28.0/kompose-linux-amd64";;
 				oc)
 						wget -q okd-project/okd/releases/download/4.12.0-0.okd-2023-02-18-033438/openshift-client-linux-4.12.0-0.okd-2023-02-18-033438.tar.gz \
 							 -O /usr/local/bin/ | \
@@ -369,42 +369,77 @@ patch_pvc () {
 	index="-1"
 	for i in $applis_svc; 
 		do 
-			index=$((index +1))
-			echo "patching $i-claim$index-persistentvolumeclaim.yaml......................................."
-			cat $i-claim$index-persistentvolumeclaim.yaml | 
-				yq eval -ojson | 
-					jq --arg name "$NAME" --arg env "$1" '.spec.resources.requests.storage="8Ti"|.spec.volumeName="applis-\($name)-\($env)"|.spec.storageClassName=""|.spec.accessModes=["ReadWriteMany"]' |
-				yq eval -P | sponge $i-claim$index-persistentvolumeclaim.yaml
+			index=$(cat $NAME.yml | yq eval -ojson | jq -r  --arg applis_svc "$i" '.services|to_entries[]| [{services: .key, volumes: .value.volumes[]|select(.source|test("/appli"))}]?|to_entries[]|select(.value.services=="\($applis_svc)").key')
+			for j in $(echo $index);
+				do
+					echo "patching $i-claim$j-persistentvolumeclaim.yaml ......................................."
+					cat $i-claim$j-persistentvolumeclaim.yaml | 
+						yq eval -ojson | 
+							jq --arg name "$i" --arg env "$1" --arg index "$j" '.spec.resources.requests.storage="8Ti"|.spec.volumeName="applis-\($name)-\($env)-\($index)"|.spec.storageClassName=""|.spec.accessModes=["ReadWriteMany"]' |
+						yq eval -P | sponge $i-claim$j-persistentvolumeclaim.yaml
+				done
 		done
 }
 
-patch_pv_applis () {
+# patch_pv_applis () {
+# 	if [[ $applis_svc != '' ]];
+# 		then
+# 			for i in $applis_svc;
+# 				do 
+# 					echo "patching $i-persistentvolume.yaml......................................."
+# echo "apiVersion: v1
+# kind: PersistentVolume
+# metadata:
+#   name: applis-$NAME-$1 
+# spec:
+#   capacity:
+#     storage: 8Ti 
+#   accessModes:
+#   - ReadWriteMany
+#   nfs: 
+#     path: /mnt/EREBUS/zpool_data/statistiques/$NAME/$1/
+#     server: erebus.v102.abes.fr 
+#   persistentVolumeReclaimPolicy: Retain" > $i-persistentvolume.yaml
+# 				done
+# 	fi
+# }
+
+create_pv_applis () {
 	if [[ $applis_svc != '' ]];
 		then
 			for i in $applis_svc;
 				do 
-					echo "patching $i-persistentvolume.yaml......................................."
+					index="-1"
+					applis_source=$(cat $NAME.yml | yq eval -ojson | \
+													jq -r --arg applis_svc "$i" '.services|to_entries[]|select(.key=="\($applis_svc)")|.value.volumes[].source|split("/applis/")|.[1]'|uniq)
+					for j in $applis_source; 
+						do
+							index=$((index +1))
+							echo "creating $i-pv$index-persistentvolume.yaml ......................................."
 echo "apiVersion: v1
 kind: PersistentVolume
 metadata:
-  name: applis-$NAME-$1 
+  name: applis-$i-$1-$index
 spec:
   capacity:
     storage: 8Ti 
   accessModes:
   - ReadWriteMany
   nfs: 
-    path: /mnt/EREBUS/zpool_data/statistiques/$NAME/$1/
+    path: /mnt/EREBUS/zpool_data/$j
     server: erebus.v102.abes.fr 
-  persistentVolumeReclaimPolicy: Retain" > $i-persistentvolume.yaml
+  persistentVolumeReclaimPolicy: Retain" > $i-pv$index-persistentvolume.yaml
+						done
 				done
 	fi
 }
 
 # 6> génération des manifests
 
-applis_svc=$(cat $NAME.yml | yq eval -ojson | 
-	jq -r '.services|to_entries[]| [{services: .key, volumes: .value.volumes[]|select(.source|test("/appli"))}]?|.[].services')
+applis_svc=$(cat $NAME.yml | yq eval -ojson | \
+	jq -r '.services|to_entries[]| [{services: .key, volumes: .value.volumes[]|select(.source|test("/appli"))}]?|.[].services'|uniq)
+applis_source=$(cat $NAME.yml | yq eval -ojson | \
+    jq -r '.services|to_entries[]| [{services: .key, volumes: .value.volumes[]|select(.source|test("/appli"))}]?|.[].volumes.source')
 if [ -n "$4" ] && [ "$4" = "kompose" ]; then
 	echo -e "6> #################### génération des manifests ####################\n"
 	if [ -n "$5" ] && [ "$5" = "helm" ]; then  
@@ -416,7 +451,7 @@ if [ -n "$4" ] && [ "$4" = "kompose" ]; then
 	patch_secret
 	patch_secretKeys
 	patch_networkPolicy $1
-	patch_pv_applis $1
+	create_pv_applis $1
 	patch_pvc $1
 	echo -e "\n"
 fi
@@ -563,22 +598,51 @@ if [[ "$answer" = "y" ]];
                 echo "First connect to your OKD cluster with \"export KUBECONFIG=path_to_kubeconfig\" and reexecute the script..........................."
                 exit 1
             else
-                echo "Would you like to create a new project?(y/n)...................................."
-                read answer
-                if [[ "$answer" == "y" ]];
-                    then
-                        echo "Enter the name of the project...................................."
-                        read project
-                        oc new-project $project
-                        echo -e "Setting SCC anyuid to default SA.......................................\n"
-                        oc adm policy add-scc-to-user anyuid -z default
-                        echo -e "Creation of docker secret for pulling images without restriction.......................................\n"
-                        oc create secret docker-registry docker.io --docker-server=docker.io --docker-username=***REMOVED*** --docker-password=***REMOVED***
-                        oc secrets link default docker.io --for=pull
-						echo "Release pv applis-$NAME-$1..........................................................\n"
-						oc patch pv applis-$NAME-$1 -p '{"spec":{"claimRef": null}}'
-						echo -e "\n"
-                fi
+				while true; do
+					read -p "Would you like to create a new project?(y/n)...................................." yn
+					case $yn in
+						[Yy]* )                         
+							echo "Enter the name of the project...................................."
+							read project
+							oc new-project $project
+							echo -e "Setting SCC anyuid to default SA.......................................\n"
+							oc adm policy add-scc-to-user anyuid -z default
+							echo -e "Creation of docker secret for pulling images without restriction.......................................\n"
+							oc create secret docker-registry docker.io --docker-server=docker.io --docker-username=***REMOVED*** --docker-password=***REMOVED***
+							oc secrets link default docker.io --for=pull
+							echo -e "Releasing pv applis-$NAME-$1..........................................................\n"
+							oc patch pv applis-$NAME-$1 -p '{"spec":{"claimRef": null}}'
+							echo -e "\n"
+							break;;
+						[Nn]* )
+							echo "Ready to deploy $name. Press \"Enter\" to begin......................................."
+							read answer
+							oc apply -f "*.yaml*"
+							echo -e "\n"
+							oc get pods
+							echo -e "\n"
+							copy_to_okd
+							echo -e "\n";;
+						* ) echo "Please answer yes or no.";;
+					esac
+				done
+
+                # echo "Would you like to create a new project?(y/n)...................................."
+                # read answer
+                # if [[ "$answer" == "y" ]];
+                #     then
+                #         echo "Enter the name of the project...................................."
+                #         read project
+                #         oc new-project $project
+                #         echo -e "Setting SCC anyuid to default SA.......................................\n"
+                #         oc adm policy add-scc-to-user anyuid -z default
+                #         echo -e "Creation of docker secret for pulling images without restriction.......................................\n"
+                #         oc create secret docker-registry docker.io --docker-server=docker.io --docker-username=***REMOVED*** --docker-password=***REMOVED***
+                #         oc secrets link default docker.io --for=pull
+				# 		echo "Release pv applis-$NAME-$1..........................................................\n"
+				# 		oc patch pv applis-$NAME-$1 -p '{"spec":{"claimRef": null}}'
+				# 		echo -e "\n"					
+                # fi
                 echo "Ready to deploy $name. Press \"Enter\" to begin......................................."
                 read answer
                 oc apply -f "*.yaml*"
