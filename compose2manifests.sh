@@ -60,7 +60,7 @@ install_bin () {
                 docker-compose)
                         BIN="docker/compose/releases/latest/download/docker-compose-linux-x86_64";;
                 kompose)
-                        BIN="kubernetes/kompose/releases/latest/1.28.0/kompose-linux-amd64";;
+                        BIN="kubernetes/kompose/releases/download/v1.28.0/kompose-linux-amd64";;
 				oc)
 						wget -q okd-project/okd/releases/download/4.12.0-0.okd-2023-02-18-033438/openshift-client-linux-4.12.0-0.okd-2023-02-18-033438.tar.gz \
 							 -O /usr/local/bin/ | \
@@ -188,6 +188,9 @@ docker-compose -f $NAME.yml convert --format json \
 | jq 'del (.services."theses-elasticsearch-setupusers")' \
 | jq 'del (.services."theses-api-diffusion-poc")' \
 | jq 'del (.services[].mem_limit)'\
+| jq '.volumes|=with_entries(.key|=gsub("\\.";"-"))' \
+| jq '.services[].volumes[]?|=(if .type=="bind" then . else .source|=gsub("\\.";"-") end)' \
+| jq '.services|=with_entries(.value|=(select(has("volumes")).volumes |= sort_by((.type)) ))' \
 | docker-compose -f - convert | sponge $NAME.yml
 
 message
@@ -459,35 +462,52 @@ fi
 # 7> Calcul des tailles des disques persistants
 
 echo "7>#################### Size calculation of persistent volumes ###################\n"
-SOURCES=$(for i in $(cat $NAME.yml | yq eval -ojson| 
-                                    jq -r '.services|to_entries[] |
-                                                     select(.value.volumes|
-                                                     to_entries[]|
-                                                     .value.source|
-                                                     test("applis")|not)?|
-                                                     .value.volumes|map(.source)[]'); 
-                do 
-                    SERVICE=$(cat $NAME.yml | yq eval -ojson| 
-                                            jq -r --arg service "$i" '.services|to_entries[] |
-                                                                select(.value.volumes | 
-                                                                to_entries[] |
-                                                                .value.source | 
-                                                                test("\($service)"))? |
-                                                                .key')
-                    REP=$(pwd); 
-                    if [[ $(echo "$i"|grep $REP) != '' ]];
-                    then
-                        echo $SERVICE:$(echo $i | awk -F"$REP" '{print $2}'); 
-                    else 
-                        echo $SERVICE:$i; 
-                    fi; 
-                done)
-echo $SOURCES
+# SOURCES=$(for i in $(cat $NAME.yml | yq eval -ojson| 
+#                                     jq -r '.services|to_entries[] |
+#                                                      select(.value.volumes|
+#                                                      to_entries[]|
+#                                                      .value.source|
+#                                                      test("applis")|not)?|
+#                                                      .value.volumes|map(.source)[]'); 
+#                 do 
+#                     SERVICE=$(cat $NAME.yml | yq eval -ojson| 
+#                                             jq -r --arg service "$i" '.services|to_entries[] |
+#                                                                 select(.value.volumes | 
+#                                                                 to_entries[] |
+#                                                                 .value.source | 
+#                                                                 test("\($service)"))? |
+#                                                                 .key')
+#                     REP=$(pwd); 
+#                     if [[ $(echo "$i"|grep $REP) != '' ]];
+#                     then
+#                         echo $SERVICE:$(echo $i | awk -F"$REP" '{print $2}'); 
+#                     else 
+#                         echo $SERVICE:$i; 
+#                     fi; 
+#                 done)
+# echo $SOURCES
 
+# SOURCES=$( \
+# 		  cat movies.yml | yq eval -ojson| jq -r --arg DIR "${PWD##*/}" \
+# 										   '( \
+# 											 .services[].volumes[]?|select(.type=="bind")|select(.source!="/applis") \
+# 											) |= \ 
+# 											{ source: .source|split("\($DIR)")|.[1], type: .type, target: .target }| \
+# 											.services|to_entries[]| \
+# 											{ sources: (.key + ":" + ( \
+# 																	 .value|select(has("volumes")).volumes[]|select(.type=="bind")|select(.source!=null)|.source \
+# 																	 ) \
+# 														) }|.sources' \
+# 		  ) \
+
+SOURCES=$(cat movies.yml | yq eval -ojson| jq -r --arg DIR "${PWD##*/}" '(.services[].volumes[]?|select(.type=="bind")|select(.source|test("home|root")))|={source: .source|split("\($DIR)")|.[1], type: .type, target: .target}|del (.services[].volumes[]?|select(.source|test("sock")))| del (.services[].volumes[]?|select(.source|test("/applis")))|.services|to_entries[]|{sources: (.key + ":." + (.value|select(has("volumes")).volumes[]|select(.type=="bind")|select(.source!=null)|.source))}|.sources')
+echo $SOURCES
+# exit 1
 index=0
 declare -a tab1
 declare -a tab2
 declare -a tab3
+calc(){ awk "BEGIN { print $*}"; }
 for i in $SOURCES; 
     do 
         SVC=$(echo $i | cut -d':' -f1)
@@ -503,7 +523,7 @@ for i in $SOURCES;
         # else 
         #     sshfs root@diplotaxis4-prod:/$SRC volume_$SVC 2> /dev/null
         # fi
-        if [[  $(echo $SRC |grep "/volumes") != '' ]]
+        if [[  $(echo $SRC |grep "./") != '' ]]
             then
                 src="/opt/pod/${NAME}-docker/${SRC}"
             else
@@ -512,24 +532,36 @@ for i in $SOURCES;
         # echo "Calculating needed size for disk claiming......................." 
         # tab1[$index]=$(du -s volume_${SVC} | cut -f1) 
         tab1[$index]=$(ssh root@${diplo} du -s $src | cut -f1) 
-        # echo $SVC:${tab1[$index]}
-        tab2[$index]=$(printf %.0f $(echo "${tab1[$index]} / (1024*1024) +1 "|bc -l) 2> /dev/null) 
-        # echo $SVC:${tab2[$index]}
-        tab3[$index]=$(cat $NAME.yml | yq eval -ojson| 
-                       jq -r --arg size "${tab2[$index]}" --arg svc "$SVC" --arg src "$SRC" '.services
-                       |to_entries[] | select(.value.volumes | to_entries[] |.value.source | 
-                            test("\($src)"))?|.value.volumes|=
-                                map(.|=with_entries(select(.key="source"))|.source="\($src)"|.size="\($size)Gi")')
-        # echo "${tab3[*]}"      
+        echo $SVC:${tab1[$index]}
+		if [[ ${tab1[$index]} -lt "100000" ]];
+			then
+				tab2[$index]="100Mi"
+			else
+				tab2[$index]=$(echo $(calc "int(${tab1[$index]} / (1024*1024) +1)+1")Gi)
+		fi
+        echo $SVC:${tab2[$index]}
+        tab3[$index]=$(cat $NAME.yml | yq eval -ojson| jq -r --arg size "${tab2[$index]}" --arg svc "$SVC" --arg src "$SRC" '.services |to_entries[] | select(.value.volumes | to_entries[] |.value.source | test("\($src)$"))?|select(.key=="\($svc)")|.value.volumes|=map(select(.source|test("\($src)$"))|with_entries(select(.key="source"))|.source="\($src)"|.size="\($size)")')
+		
+		# $(cat $NAME.yml | yq eval -ojson| 
+        #                jq -r --arg size "${tab2[$index]}" --arg svc "$SVC" --arg src "$SRC" '.services
+        #                |to_entries[] | select(.value.volumes | to_entries[] |.value.source | 
+        #                     test("\($src)"))?|.value.volumes|=
+        #                         map(.|=with_entries(select(.key="source"))|.source="\($src)"|.size="\($size)")')
         echo -e "\n"
     done
+        # echo "${tab3[*]}"
+
+# exit 1
 
 # Change size of volumeclaim yaml declaration
 for i in "${tab3[@]}"; 
     do 
-        size=$(echo $i | jq -r '.value.volumes[].size');  
+        size=$(echo $i | jq -r '.value.volumes[].size'); 
+		# echo $size
         service=$(echo $i | jq -r '.key'); 
+		# echo $service
         index=$(echo $i | jq -r --arg size "$size" '.value.volumes[].size|index("\($size)")'); 
+		# echo $index
         cat $service-claim$index-persistentvolumeclaim.yaml | 
             yq eval -ojson| 
             jq --arg size "$size" '.spec.resources.requests.storage=$size'|
@@ -548,12 +580,12 @@ if [[ "$answer" = "y" ]];
                 target=$(echo $i | jq -r '.value.volumes[].target')
                 source=$(echo $i | jq -r '.value.volumes[].source')
                 private_key=$(cat ~/.ssh/id_rsa)
-                # if [[ "$(echo $source| grep backup)" = '' ]];
-                if [[  $(echo $source |grep "/volumes") != '' ]]
+                if [[ "$(echo $source| grep backup)" != '' ]];
+                # if [[  $(echo $source |grep "/volumes") = '' ]]
                     then
-                        src="/opt/pod/${NAME}-docker/${source}"
+						src=$source
                     else
-                        src=$source
+						src="/opt/pod/${NAME}-docker/${source}"
                 fi
                 size=$(echo $i | jq -r '.value.volumes[].size')
                 echo "###########################################################################"
@@ -566,8 +598,8 @@ rsync -av -e 'ssh -o StrictHostKeyChecking=no' ${diplo}.v106.abes.fr:${src}/ ${t
 exit"
                 echo "###########################################################################"
                 POD=$(oc get pods -o json| jq -r --arg service "$service" '.items[]|.metadata|select(.name|test("\($service)-[0-9]"))|.name'|tail -n1)
+                # sleep 10
                 oc debug $POD
-                sleep 5
                 # echo "oc rsync --progress=true ./volume_${service} $POD-debug:${target} --strategy=tar"
                 # oc rsync --progress=true ./volume_${service} $POD-debug:${target}
             done
@@ -610,8 +642,11 @@ if [[ "$answer" = "y" ]];
 							echo -e "Creation of docker secret for pulling images without restriction.......................................\n"
 							oc create secret docker-registry docker.io --docker-server=docker.io --docker-username=picabesesr --docker-password=SVmx2Puw3scbcb4J
 							oc secrets link default docker.io --for=pull
-							echo -e "Releasing pv applis-$NAME-$1..........................................................\n"
-							oc patch pv applis-$NAME-$1 -p '{"spec":{"claimRef": null}}'
+							for i in $(oc get pv -ojson | jq -r '.items[].metadata|select(.name|test("applis-item")).name')
+								do
+									echo -e "Releasing pv applis-$i..........................................................\n"
+									oc patch pv $i -p '{"spec":{"claimRef": null}}'
+								done
 							echo -e "\n"
 							break;;
 						[Nn]* )
