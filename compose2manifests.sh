@@ -364,7 +364,7 @@ patch_secretKeys () {
 		then 
 			NETWORK=$NAME-docker-$1-default-networkpolicy.yaml
 		else
-			NETWORK=okd-$1-default-networkpolicy.yaml
+			NETWORK=okd-default-networkpolicy.yaml
 	fi
 	cat $NETWORK | 
 		yq eval -ojson | 
