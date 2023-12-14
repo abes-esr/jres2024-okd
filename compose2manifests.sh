@@ -360,7 +360,13 @@ patch_secretKeys () {
 # Patch networkpolicy to allow ingress
 	patch_networkPolicy () {
 	echo "patching $NAME-docker-$1-default-networkpolicy.yaml......................................."
-	cat $NAME-docker-$1-default-networkpolicy.yaml | 
+	if [[ $1 != "local" ]]
+		then 
+			NETWORK=$NAME-docker-$1-default-networkpolicy.yaml
+		else
+			NETWORK=okd-$1-default-networkpolicy.yaml
+	fi
+	cat $NETWORK | 
 		yq eval -ojson | 
 		jq '.spec.ingress|=
 				map(.from |= .+ [{"namespaceSelector":{"matchLabels":{ "policy-group.network.openshift.io/ingress": ""}}}])'|
@@ -499,7 +505,7 @@ echo "7>#################### Size calculation of persistent volumes ############
 # 																	 ) \
 # 														) }|.sources' \
 # 		  ) \
-
+size_calculation () {
 SOURCES=$(cat movies.yml | yq eval -ojson| jq -r --arg DIR "${PWD##*/}" '(.services[].volumes[]?|select(.type=="bind")|select(.source|test("home|root")))|={source: .source|split("\($DIR)")|.[1], type: .type, target: .target}|del (.services[].volumes[]?|select(.source|test("sock")))| del (.services[].volumes[]?|select(.source|test("/applis")))|.services|to_entries[]|{sources: (.key + ":." + (.value|select(has("volumes")).volumes[]|select(.type=="bind")|select(.source!=null)|.source))}|.sources')
 echo $SOURCES
 # exit 1
@@ -568,12 +574,14 @@ for i in "${tab3[@]}";
             yq eval -P |
         sponge $service-claim$index-persistentvolumeclaim.yaml 
     done
+}
 
 copy_to_okd () {
 echo "Would you like to copy current data to okd volume (may be long)? (y/n)......................................."
 read answer
 if [[ "$answer" = "y" ]];
     then
+		size_calculation
         for i in "${tab3[@]}"; 
             do 
                 service=$(echo $i | jq -r '.key')
