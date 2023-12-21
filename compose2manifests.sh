@@ -390,29 +390,6 @@ patch_pvc () {
 		done
 }
 
-# patch_pv_applis () {
-# 	if [[ $applis_svc != '' ]];
-# 		then
-# 			for i in $applis_svc;
-# 				do 
-# 					echo "patching $i-persistentvolume.yaml......................................."
-# echo "apiVersion: v1
-# kind: PersistentVolume
-# metadata:
-#   name: applis-$NAME-$1 
-# spec:
-#   capacity:
-#     storage: 8Ti 
-#   accessModes:
-#   - ReadWriteMany
-#   nfs: 
-#     path: /mnt/EREBUS/zpool_data/statistiques/$NAME/$1/
-#     server: erebus.v102.abes.fr 
-#   persistentVolumeReclaimPolicy: Retain" > $i-persistentvolume.yaml
-# 				done
-# 	fi
-# }
-
 create_pv_applis () {
 	if [[ $applis_svc != '' ]];
 		then
@@ -443,6 +420,32 @@ spec:
 	fi
 }
 
+patch_configmaps() {
+
+# rsync -av movies-wikibase.orig movies-wikibase.yaml
+
+claims=$(cat $1 | yq -ojson| jq -r '.spec.template.spec.containers[].volumeMounts[]?|select(.mountPath|test("(\\.[^.]+)$")).name')
+# echo $claims
+
+for i in $claims
+    do cat $1 | yq -ojson| \
+        jq -r --arg i $i 'del(.spec.template.spec.volumes[]?|(select(.name=="\($i)")))'| \
+        sponge $1
+    done
+# cat $1
+
+services=$(cat $1 | yq -ojson| jq -r '.spec.template.spec.containers[].volumeMounts[]?|select(.mountPath|test("(\\.[^.]+)$"))|(.name|split("-claim")|.[0]) + "-" + (.mountPath|split("/")|last|gsub("_";"-")|gsub("\\.";"-")|ascii_downcase)')
+# echo $services
+
+for i in $services
+    do cat $1 | yq -ojson| \
+        jq -r --arg i $i '((.spec.template.spec.containers[].volumeMounts[]?|select((.mountPath|test("(\\.[^.]+)$")) and ((has("subPath")|not)) )) |= {mountPath: .mountPath, name: ((.name|split("-claim")|.[0]) + "-" + (.mountPath|split("/")|last|gsub("_";"-")|gsub("\\.";"-")|ascii_downcase)), subPath: (.mountPath|split("/")|last)})|.spec.template.spec.volumes+=[{configMap: {defaultMode: 420, name: $i}, name: $i}]' | \
+        sponge $1 
+    done 
+cat $1 | yq -P
+# exit 1
+}
+
 # 6> génération des manifests
 
 applis_svc=$(cat $NAME.yml | yq eval -ojson | \
@@ -462,6 +465,7 @@ if [ -n "$4" ] && [ "$4" = "kompose" ]; then
 	patch_networkPolicy $1
 	create_pv_applis $1
 	patch_pvc $1
+	patch_configmaps $1
 	echo -e "\n"
 fi
 
@@ -506,7 +510,7 @@ echo "7>#################### Size calculation of persistent volumes ############
 # 														) }|.sources' \
 # 		  ) \
 size_calculation () {
-SOURCES=$(cat movies.yml | yq eval -ojson| jq -r --arg DIR "${PWD##*/}" '(.services[].volumes[]?|select(.type=="bind")|select(.source|test("home|root")))|={source: .source|split("\($DIR)")|.[1], type: .type, target: .target}|del (.services[].volumes[]?|select(.source|test("sock")))| del (.services[].volumes[]?|select(.source|test("/applis")))|.services|to_entries[]|{sources: (.key + ":." + (.value|select(has("volumes")).volumes[]|select(.type=="bind")|select(.source!=null)|.source))}|.sources')
+SOURCES=$(cat movies.yml | yq eval -ojson| jq -r --arg DIR "${PWD##*/}" '(.services[].volumes[]?|select(.type=="bind")|select(.source|test("home|root")))|={source: .source|split("\($DIR)")|.[1], type: .type, target: .target}|del (.services[].volumes[]?|select(.source|test("sock")))| del (.services[].volumes[]?|select(.source|test("/applis")))|.services|to_entries[]|{sources: (.key + ":." + (.value|select(has("volumes")).volumes[]|select(.type=="bind")|select(.source!=null)|select(.source|test("(\\.[^.]+)$")|not)|.source))}|.sources')
 echo $SOURCES
 # exit 1
 index=0
