@@ -11,7 +11,7 @@ help () {
 	echo -e "dev|test|prod: \tenvironnement sur lequel récupérer le .env. Local: fournir manuellement les '.env' et 'docker-compose.yml'"
 	echo -e "appli_name: \t\tnom de l'application à convertir"
 	echo -e "default or '' : \tGenerates cleaned appli.yml compose file to plain k8s manifests "
-	echo -e "env_file: \t\tGenerates cleaned advanced appli.yml with migrating plain 'environment' \n\t\t\tto 'env_file' statement, will be converted into k8s configmaps"
+	echo -e "env_file: \t\tGenerates cleaned advanced appli.yml with migrating pflain 'environment' \n\t\t\tto 'env_file' statement, will be converted into k8s configmaps"
 	echo -e "secret: \t\tThe same as env_file, in addition generates advanced appli.yml with \n\t\t\tmigrating all vars containing 'PASSWORD' or 'KEY' as keyword to secret,\n\t\t\twill be converted into k8s secrets"
 	echo -e "kompose: \t\tConverts appli.yml into plain k8s manifests ready to be deployed with \n\t\t\t'kubectl apply -f *.yaml"
 	echo -e "helm: \t\t\tKompose option that generates k8s manifest into helm skeleton for appli.yml\n"
@@ -123,6 +123,8 @@ if [[ "$1" == "prod" ]] || [[ "$1" == "test" ]] || [[ "$1" == "dev" ]]; then
 		echo $PWD; \
 		rsync -av root@$diplo.v106.abes.fr:/opt/pod/$2-docker/.env .; \
 elif [[ "$1" == local ]];then
+		echo "Enter a diplotaxis name"
+		read diplo
 		if ! [[ -f ./docker-compose.yml ]]; then
 			echo "If $2 is hosted on gitlab.abes.fr, you can download your docker-compose.yml (y/n).......................................?"
 			read rep
@@ -161,8 +163,7 @@ echo -e "projet: $NAME\n"
 
 echo "############################################"
 
-
-echo "ETAPE 2: Conversion du  en manifests Kubernetes"
+echo "ETAPE 3: Conversion du  en manifests Kubernetes"
 
 message () {
 	if [ $(echo $?) = "0" ]; 
@@ -180,8 +181,7 @@ message
 # 2> Conversion initiale du docker-compose.yml
 echo -e "2> #################### Conversion initiale du $NAME.yml ####################\n"
 docker-compose -f $NAME.yml convert --format json \
-| jq 'del (.services[].command)' \
-| jq 'del (.services[].entrypoint)' \
+| jq 'del(..|nulls)' \
 | jq --arg toto "$NAME" 'del (.services."\($toto)-watchtower")' \
 | jq 'del (.services[]."depends_on")' \
 | jq 'del (.services."theses-elasticsearch-setupcerts")' \
@@ -324,7 +324,7 @@ echo -e "\n"
 patch_secret () {
 	for i in $(ls *secret*yaml); \
 		do  \
-			echo "Patching $i......................................."; 
+			echo "Patching \n character in $i......................................."; 
 			cat $i | yq eval -ojson \
 				   | jq -r '.data|=with_entries(.value |=(@base64d|sub("\n";"")|@base64))' \
 				   | yq eval - -P \
@@ -336,13 +336,13 @@ patch_secret () {
 patch_secretKeys () {
 	for i in $(ls *deployment*); 
 		do 
-			echo "patching $i......................................."
+			echo "patching lowercase in $i......................................."
 			cat $i| yq eval -ojson |
 			jq '.spec.template.spec.containers
 			|= map(
 				(.env
 				|= map(
-					if (.name|test("SECRET|PASSWORD|KEY"))
+					if (.name|test("SECRET|PASS|KEY"))
 					then .valueFrom
 						|= with_entries(.key="secretKeyRef"
 							|.value.name=(.value.key|ascii_downcase|gsub("_";"-"))
@@ -359,7 +359,7 @@ patch_secretKeys () {
 
 # Patch networkpolicy to allow ingress
 	patch_networkPolicy () {
-	echo "patching $NAME-docker-$1-default-networkpolicy.yaml......................................."
+	echo "patching ingress in $NAME-docker-$1-default-networkpolicy.yaml......................................."
 	if [[ $1 != "local" ]]
 		then 
 			NETWORK=$NAME-docker-$1-default-networkpolicy.yaml
@@ -381,7 +381,7 @@ patch_pvc () {
 			index=$(cat $NAME.yml | yq eval -ojson | jq -r  --arg applis_svc "$i" '.services|to_entries[]| [{services: .key, volumes: .value.volumes[]|select(.source|test("/appli"))}]?|to_entries[]|select(.value.services=="\($applis_svc)").key')
 			for j in $(echo $index);
 				do
-					echo "patching $i-claim$j-persistentvolumeclaim.yaml ......................................."
+					echo "patching /applis in $i-claim$j-persistentvolumeclaim.yaml ......................................."
 					cat $i-claim$j-persistentvolumeclaim.yaml | 
 						yq eval -ojson | 
 							jq --arg name "$i" --arg env "$1" --arg index "$j" '.spec.resources.requests.storage="8Ti"|.spec.volumeName="applis-\($name)-\($env)-\($index)"|.spec.storageClassName=""|.spec.accessModes=["ReadWriteMany"]' |
@@ -422,29 +422,79 @@ spec:
 
 patch_configmaps() {
 
-# rsync -av movies-wikibase.orig movies-wikibase.yaml
+	 for i in $(ls | grep "deployment")
+	 	do 
+			echo "patching configMaps in $i ......................................."
+			claims=$(cat $i | yq -ojson| jq -r '.spec.template.spec.containers[].volumeMounts[]?|select((.mountPath|test("(\\.[^.]+)$")) and (.name|test("claim"))).name')
+			# echo $claims
 
-claims=$(cat $1 | yq -ojson| jq -r '.spec.template.spec.containers[].volumeMounts[]?|select(.mountPath|test("(\\.[^.]+)$")).name')
-# echo $claims
+			for j in $claims
+				do 
+					echo "deleting ${j}-persistentvolumeclaim.yaml ......................................."
+			        rm -f ${j}-persistentvolumeclaim.yaml
+					cat $i | yq -ojson| \
+					jq -r --arg j $j 'del(.spec.template.spec.volumes[]?|(select(.name=="\($j)")))'| \
+					sponge $i
+				done
+			# cat $i
 
-for i in $claims
-    do cat $1 | yq -ojson| \
-        jq -r --arg i $i 'del(.spec.template.spec.volumes[]?|(select(.name=="\($i)")))'| \
-        sponge $1
-    done
-# cat $1
+			services=$(cat $i | yq -ojson| jq -r '.spec.template.spec.containers[].volumeMounts[]?|select((.mountPath|test("(\\.[^.]+)$")) and (.name|test("claim")))|(.name|split("-claim")|.[0]) + "-" + (.mountPath|split("/")|last|gsub("_";"-")|gsub("\\.";"-")|ascii_downcase)')
+			# echo $services
 
-services=$(cat $1 | yq -ojson| jq -r '.spec.template.spec.containers[].volumeMounts[]?|select(.mountPath|test("(\\.[^.]+)$"))|(.name|split("-claim")|.[0]) + "-" + (.mountPath|split("/")|last|gsub("_";"-")|gsub("\\.";"-")|ascii_downcase)')
-# echo $services
-
-for i in $services
-    do cat $1 | yq -ojson| \
-        jq -r --arg i $i '((.spec.template.spec.containers[].volumeMounts[]?|select((.mountPath|test("(\\.[^.]+)$")) and ((has("subPath")|not)) )) |= {mountPath: .mountPath, name: ((.name|split("-claim")|.[0]) + "-" + (.mountPath|split("/")|last|gsub("_";"-")|gsub("\\.";"-")|ascii_downcase)), subPath: (.mountPath|split("/")|last)})|.spec.template.spec.volumes+=[{configMap: {defaultMode: 420, name: $i}, name: $i}]' | \
-        sponge $1 
-    done 
-cat $1 | yq -P
-# exit 1
+			for j in $services
+				do cat $i | yq -ojson| \
+					jq -r --arg j $j '((.spec.template.spec.containers[].volumeMounts[]?|select((.mountPath|test("(\\.[^.]+)$")) and (.name|test("claim")) )) |= {mountPath: .mountPath, name: ((.name|split("-claim")|.[0]) + "-" + (.mountPath|split("/")|last|gsub("_";"-")|gsub("\\.";"-")|ascii_downcase)), subPath: (.mountPath|split("/")|last)})|.spec.template.spec.volumes+=[{configMap: {defaultMode: 420, name: $j}, name: $j}]' | \
+					sponge $i 
+				done 
+			# cat $i | yq -P
+			# exit 1
+		done
 }
+
+create_configmaps() {
+	# echo "ETAPE 2: Création des object configMaps pour les volumes bind qui sont des fichiers et non des répertoires"
+
+	CM=$(cat $NAME.yml | yq -o json | jq -r --arg pwd "$NAME-docker-$1" '.services[].volumes|select(.!=null)|.[]|select(.type == "bind")|select(.source|test("(\\.[^.]+)$"))|select(.source|test("sock")|not).source|split($pwd)|.[1]?')
+	CM_RENAMED=$(cat $NAME.yml | yq -o json | jq -r --arg pwd "$NAME-docker-$1" '.services|to_entries[]|{name: .key, volumes: (.value|.volumes|select(.!=null)|.[]|select(.type == "bind")|select(.source|test("(\\.[^.]+)$"))|select(.source|test("sock")|not).source|split($pwd)|.[1])}|(.name + "-" + (.volumes|split("/")|last|gsub("\\/";"-")|gsub("\\.";"-")|gsub("\\_";"-")|ascii_downcase))')
+
+	declare -a tab_CM
+	declare -a tab_CM_RENAMED
+
+	index=-1
+	for i in $CM 
+		do 
+			index=$(($index + 1))
+			tab_CM[$index]=$i
+		done 
+	# echo ${tab_CM[@]}
+
+	index=-1
+	for i in $CM_RENAMED
+		do 
+			index=$(($index + 1))
+			tab_CM_RENAMED[$index]=$i
+		done 
+	# echo ${tab_CM_RENAMED[@]}
+
+
+	if [[ ! -d './volumes' ]]; 
+		then
+			mkdir volumes
+	fi
+
+	sshfs root@$diplo.v106.abes.fr:/opt/pod/$NAME-docker/ ./volumes/
+
+	for ((i=0; i<=$index; i++ ))
+		do 
+			echo "creating configMap file ${tab_CM_RENAMED[$i]}-configmap.yaml ......................................."
+			oc create cm ${tab_CM_RENAMED[$i]} --from-file=./volumes/${tab_CM[$i]} --dry-run=client -o yaml > ${tab_CM_RENAMED[$i]}-configmap.yaml
+		done
+
+	fusermount -u volumes
+
+	# echo "############################################"
+}
+
 
 # 6> génération des manifests
 
@@ -465,58 +515,30 @@ if [ -n "$4" ] && [ "$4" = "kompose" ]; then
 	patch_networkPolicy $1
 	create_pv_applis $1
 	patch_pvc $1
-	patch_configmaps $1
-	echo -e "\n"
+	patch_configmaps $CLEANED
+	create_configmaps $1
 fi
 
 # 7> Calcul des tailles des disques persistants
 
-echo "7>#################### Size calculation of persistent volumes ###################\n"
-# SOURCES=$(for i in $(cat $NAME.yml | yq eval -ojson| 
-#                                     jq -r '.services|to_entries[] |
-#                                                      select(.value.volumes|
-#                                                      to_entries[]|
-#                                                      .value.source|
-#                                                      test("applis")|not)?|
-#                                                      .value.volumes|map(.source)[]'); 
-#                 do 
-#                     SERVICE=$(cat $NAME.yml | yq eval -ojson| 
-#                                             jq -r --arg service "$i" '.services|to_entries[] |
-#                                                                 select(.value.volumes | 
-#                                                                 to_entries[] |
-#                                                                 .value.source | 
-#                                                                 test("\($service)"))? |
-#                                                                 .key')
-#                     REP=$(pwd); 
-#                     if [[ $(echo "$i"|grep $REP) != '' ]];
-#                     then
-#                         echo $SERVICE:$(echo $i | awk -F"$REP" '{print $2}'); 
-#                     else 
-#                         echo $SERVICE:$i; 
-#                     fi; 
-#                 done)
-# echo $SOURCES
+echo -e "7>#################### Size calculation of persistent volumes ###################\n"
 
-# SOURCES=$( \
-# 		  cat movies.yml | yq eval -ojson| jq -r --arg DIR "${PWD##*/}" \
-# 										   '( \
-# 											 .services[].volumes[]?|select(.type=="bind")|select(.source!="/applis") \
-# 											) |= \ 
-# 											{ source: .source|split("\($DIR)")|.[1], type: .type, target: .target }| \
-# 											.services|to_entries[]| \
-# 											{ sources: (.key + ":" + ( \
-# 																	 .value|select(has("volumes")).volumes[]|select(.type=="bind")|select(.source!=null)|.source \
-# 																	 ) \
-# 														) }|.sources' \
-# 		  ) \
-size_calculation () {
-SOURCES=$(cat movies.yml | yq eval -ojson| jq -r --arg DIR "${PWD##*/}" '(.services[].volumes[]?|select(.type=="bind")|select(.source|test("home|root")))|={source: .source|split("\($DIR)")|.[1], type: .type, target: .target}|del (.services[].volumes[]?|select(.source|test("sock")))| del (.services[].volumes[]?|select(.source|test("/applis")))|.services|to_entries[]|{sources: (.key + ":." + (.value|select(has("volumes")).volumes[]|select(.type=="bind")|select(.source!=null)|select(.source|test("(\\.[^.]+)$")|not)|.source))}|.sources')
+# size_calculation () {
+copy_to_okd () {
+compose=$(docker-compose config --format json)
+if [[ $1 = "bind" ]]
+	then
+		SOURCES=$(echo $compose | jq -r --arg type $1 --arg DIR "${PWD##*/}" '(.services[].volumes[]?|select(.type=="\($type)")|select(.source|test("home|root")))|={source: .source|split("\($DIR)")|.[1], type: .type, target: .target}|del (.services[].volumes[]?|select(.source|test("sock")))| del (.services[].volumes[]?|select(.source|test("/applis")))|.services|to_entries[]|{sources: (.key + ":." + (.value|select(has("volumes")).volumes[]|select(.type=="\($type)")|select(.source!=null)|select(.source|test("(\\.[^.]+)$")|not)|.source))}|.sources')
+	else
+		SOURCES=$(echo $compose | jq -r --arg type $1 '(.services[].volumes[]?|select(.type=="\($type)")|select(.source|test("home|root")))|={source: .source, type: .type, target: .target}|del (.services[].volumes[]?|select(.source|test("sock")))| del (.services[].volumes[]?|select(.source|test("/applis")))|.services|to_entries[]|{sources: (.key + ":" + (.value|select(has("volumes")).volumes[]|select(.type=="\($type)")|select(.source!=null)|select(.source|test("(\\.[^.]+)$")|not)|.source))}|.sources')
+fi
 echo $SOURCES
 # exit 1
 index=0
 declare -a tab1
 declare -a tab2
 declare -a tab3
+declare -a tab4
 calc(){ awk "BEGIN { print $*}"; }
 for i in $SOURCES; 
     do 
@@ -533,15 +555,19 @@ for i in $SOURCES;
         # else 
         #     sshfs root@diplotaxis4-prod:/$SRC volume_$SVC 2> /dev/null
         # fi
-        if [[  $(echo $SRC |grep "./") != '' ]]
+		if [[ $1 = "volume" ]]
+			then 
+				src="/var/lib/docker/volumes/${NAME}-docker_${SRC}/_data/"
+        elif [[  $(echo $SRC |grep "./") != '' ]]
             then
-                src="/opt/pod/${NAME}-docker/${SRC}"
-            else
-                src=$SRC
+				src="/opt/pod/${NAME}-docker/${SRC}"
+		else
+			src=$SRC
         fi
         # echo "Calculating needed size for disk claiming......................." 
         # tab1[$index]=$(du -s volume_${SVC} | cut -f1) 
         tab1[$index]=$(ssh root@${diplo} du -s $src | cut -f1) 
+		echo $SRC
         echo $SVC:${tab1[$index]}
 		if [[ ${tab1[$index]} -lt "100000" ]];
 			then
@@ -550,7 +576,7 @@ for i in $SOURCES;
 				tab2[$index]=$(echo $(calc "int(${tab1[$index]} / (1024*1024) +1)+1")Gi)
 		fi
         echo $SVC:${tab2[$index]}
-        tab3[$index]=$(cat $NAME.yml | yq eval -ojson| jq -r --arg size "${tab2[$index]}" --arg svc "$SVC" --arg src "$SRC" '.services |to_entries[] | select(.value.volumes | to_entries[] |.value.source | test("\($src)$"))?|select(.key=="\($svc)")|.value.volumes|=map(select(.source|test("\($src)$"))|with_entries(select(.key="source"))|.source="\($src)"|.size="\($size)")')
+        tab3[$index]=$(cat $NAME.yml | yq eval -ojson| jq -r --arg size "${tab2[$index]}" --arg svc "$SVC" --arg src "$SRC" '.services |to_entries[] | select(.value.volumes | to_entries[] |.value.source | test("\($src)$"))?|select(.key=="\($svc)")|.value.volumes|=map(select(.source|test("\($src)$"))|with_entries(select(.key="source"))|.source="\($src)"|.size="\($size)")'|jq -s '.[0]|del(..|nulls)')
 		
 		# $(cat $NAME.yml | yq eval -ojson| 
         #                jq -r --arg size "${tab2[$index]}" --arg svc "$SVC" --arg src "$SRC" '.services
@@ -559,45 +585,72 @@ for i in $SOURCES;
         #                         map(.|=with_entries(select(.key="source"))|.source="\($src)"|.size="\($size)")')
         echo -e "\n"
     done
-        # echo "${tab3[*]}"
+
+length=$(echo "${tab3[*]}" | jq -s 'length')
+for ((i=0; i<=$length; i++ ))
+	do
+		tab4[$i]=$(echo "${tab3[*]}" | jq -s --arg i "$i" '.[$i|tonumber]')
+	done		
+
+# echo -e "${tab4[*]}"
 
 # exit 1
 
 # Change size of volumeclaim yaml declaration
-for i in "${tab3[@]}"; 
+for i in "${tab4[@]}"; 
     do 
-        size=$(echo $i | jq -r '.value.volumes[].size'); 
+		size=$(echo $i | jq -r '.value.volumes[]?.size'|uniq)
 		# echo $size
-        service=$(echo $i | jq -r '.key'); 
+		source=$(echo $i | jq -r '.value.volumes[]?.source'|uniq)
+		# echo $source
+        service=$(echo $i | jq -r '.key'|uniq)
 		# echo $service
-        index=$(echo $i | jq -r --arg size "$size" '.value.volumes[].size|index("\($size)")'); 
+        index=$(echo $i | jq -r --arg size "$size" '.value.volumes[]?.size|index("\($size)")'|uniq)
 		# echo $index
-        cat $service-claim$index-persistentvolumeclaim.yaml | 
-            yq eval -ojson| 
-            jq --arg size "$size" '.spec.resources.requests.storage=$size'|
-            yq eval -P |
-        sponge $service-claim$index-persistentvolumeclaim.yaml 
+		if [[ $1 = "bind" ]]
+			then
+				file="${service}-claim${index}-persistentvolumeclaim.yaml"
+			else
+				file="${source}-persistentvolumeclaim.yaml"
+		fi
+		if [[ $i != "null" ]]
+			then
+				cat ${file} | 
+					yq eval -ojson| 
+					jq --arg size "$size" '.spec.resources.requests.storage=$size'| 
+					yq eval -P |
+				sponge ${file} 
+		fi
     done
-}
+# }
 
-copy_to_okd () {
-echo "Would you like to copy current data to okd volume (may be long)? (y/n)......................................."
+echo "Would you like to copy current data to okd volume of type $1 (may be long)? (y/n)......................................."
 read answer
 if [[ "$answer" = "y" ]];
     then
-		size_calculation
-        for i in "${tab3[@]}"; 
+		# size_calculation $1
+		echo "DEBUG1"
+        for i in "${tab4[@]}"; 
             do 
+				echo "DEBUG2"
                 service=$(echo $i | jq -r '.key')
+				echo $service
                 target=$(echo $i | jq -r '.value.volumes[].target')
+				echo $target
                 source=$(echo $i | jq -r '.value.volumes[].source')
+				echo $source
                 private_key=$(cat ~/.ssh/id_rsa)
+				echo "DEBUG copy_to_okd)"
                 if [[ "$(echo $source| grep backup)" != '' ]];
-                # if [[  $(echo $source |grep "/volumes") = '' ]]
                     then
 						src=$source
                     else
-						src="/opt/pod/${NAME}-docker/${source}"
+						if [[ $1 = "bind" ]]
+							then
+								src="/opt/pod/${NAME}-docker/${source}"
+							else
+								src="/var/lib/docker/volumes/${NAME}-docker_${source}/_data/"
+						fi
                 fi
                 size=$(echo $i | jq -r '.value.volumes[].size')
                 echo "###########################################################################"
@@ -605,7 +658,7 @@ if [[ "$answer" = "y" ]];
                 echo "mkdir /root/.ssh && echo \"$private_key\" > /root/.ssh/id_rsa && chmod 600 -R /root/.ssh; \
 if [ \"\$(cat /etc/os-release|grep "alpine")\" = '' ]; \
 then apt update && apt install rsync openssh-client -y;  \
-else apk update && apk add rsync openssh-client-default; fi; \
+else apk update && apk -f add rsync openssh-client-default openssh-client; fi; \
 rsync -av -e 'ssh -o StrictHostKeyChecking=no' ${diplo}.v106.abes.fr:${src}/ ${target}/; \
 exit"
                 echo "###########################################################################"
@@ -620,7 +673,7 @@ fi
 
 # 8> Déploiement de l'application
 
-echo "8> ######################## Application Deployment #################################\n"
+echo -e "8> ######################## Application Deployment #################################\n"
 choice=$(
 case $1 in
 	local) echo -e "oc apply -f \"*.yaml\"\n";;
@@ -668,7 +721,8 @@ if [[ "$answer" = "y" ]];
 							echo -e "\n"
 							oc get pods
 							echo -e "\n"
-							copy_to_okd
+							copy_to_okd bind
+							copy_to_okd volume
 							echo -e "\n";;
 						* ) echo "Please answer yes or no.";;
 					esac
@@ -696,16 +750,19 @@ if [[ "$answer" = "y" ]];
 				echo -e "\n"
                 oc get pods
 				echo -e "\n"
-                copy_to_okd
+                copy_to_okd bind
+				copy_to_okd volume
 				echo -e "\n"
         fi
     else
-        copy_to_okd
+        copy_to_okd bind
+		copy_to_okd volume
+		# exit 1
 fi
 
 # 9> Redémarrage des pods et URL de connexion
 
-echo "9>############################ Pods reload #######################"
+echo -e "9>############################ Pods reload #######################\n"
 if [[ $answer != "y" ]]; then exit; fi
 echo "Restart all $NAME pods......................................." 
 oc rollout restart deploy
