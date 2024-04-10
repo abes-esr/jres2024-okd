@@ -176,7 +176,7 @@ message () {
 
 # 1> Résolution du .env
 echo -e "1> #################### Résolution du .env ####################\n"
-docker-compose config > $NAME.yml
+docker-compose config | sed 's/\.svc//g'> $NAME.yml
 message
 # 2> Conversion initiale du docker-compose.yml
 echo -e "2> #################### Conversion initiale du $NAME.yml ####################\n"
@@ -587,11 +587,12 @@ for i in $SOURCES;
     done
 
 length=$(echo "${tab3[*]}" | jq -s 'length')
-for ((i=0; i<=$length; i++ ))
+for ((i=0; i<$length; i++ ))
 	do
 		tab4[$i]=$(echo "${tab3[*]}" | jq -s --arg i "$i" '.[$i|tonumber]')
 	done		
 
+# echo "affichage du tableau"
 # echo -e "${tab4[*]}"
 
 # exit 1
@@ -635,9 +636,11 @@ if [[ "$answer" = "y" ]];
 				echo "DEBUG2"
                 service=$(echo $i | jq -r '.key')
 				echo $service
-                target=$(echo $i | jq -r '.value.volumes[].target')
+                # target=$(echo $i | jq -r '.value.volumes[].target')
+                target=$(echo $i | jq -r '.value.volumes|last.target')
 				echo $target
-                source=$(echo $i | jq -r '.value.volumes[].source')
+                # source=$(echo $i | jq -r '.value.volumes[].source')
+                source=$(echo $i | jq -r '.value.volumes|last.source')
 				echo $source
                 private_key=$(cat ~/.ssh/id_rsa)
 				echo "DEBUG copy_to_okd)"
@@ -662,7 +665,7 @@ else apk update && apk -f add rsync openssh-client-default openssh-client; fi; \
 rsync -av -e 'ssh -o StrictHostKeyChecking=no' ${diplo}.v106.abes.fr:${src}/ ${target}/; \
 exit"
                 echo "###########################################################################"
-                POD=$(oc get pods -o json| jq -r --arg service "$service" '.items[]|.metadata|select(.name|test("\($service)-[0-9]"))|.name'|tail -n1)
+                POD=$(oc get pods -o json| jq -r --arg service "$service" '.items[]|.metadata|select(.name|test("\($service)-[b-df24-9]+-[b-df-hj-np-tv-z24-9]{5}"))|.name')
                 # sleep 10
                 oc debug $POD
                 # echo "oc rsync --progress=true ./volume_${service} $POD-debug:${target} --strategy=tar"
