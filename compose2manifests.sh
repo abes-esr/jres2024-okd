@@ -105,8 +105,8 @@ echo "ETAPE 3: Téléchargement du docker-compose"
 if [[ "$1" == "prod" ]] || [[ "$1" == "test" ]] || [[ "$1" == "dev" ]]; then
 		echo "##### Avertissement! #######################"
 		echo "Il faut que clé ssh valide sur tous les comptes root des diplotaxis{}-${1} pour continuer......................................."
-		echo "Continuer? (y/n)"
-		read continue
+		read -p "Continuer? (y/n)...........[y]" continue
+		continue=${continue:-y}
 		if [[ "$continue" != "y" ]]; then 
 			echo "Please re-execute the script after having installed your ssh pub keys on diplotaxis{}-${1}"
 			exit 1;
@@ -115,7 +115,7 @@ if [[ "$1" == "prod" ]] || [[ "$1" == "test" ]] || [[ "$1" == "dev" ]]; then
 		diplo=$(for i in {1..6}; \
 		do ssh root@diplotaxis$i-${1}.v106.abes.fr docker ps --format json | jq --arg toto "diplotaxis${i}-${1}" '{diplotaxis: ($toto), nom: .Names}'; \
 		done \
-		| jq -rs --arg var "$2" '.[] | select(.nom | test("\($var)-watchtower"))| .diplotaxis'); \
+		| jq -rs --arg var "$2" '[.[] | select(.nom | test("^\($var)-.*"))]|first|.diplotaxis'); \
 		echo -e "$NAME is running on $diplo\n"
 		mkdir $2-docker-${1} && cd $2-docker-${1}; \
 		echo "Getting docker-compose.file from GitHub.......................................";  \
@@ -156,6 +156,24 @@ elif ! test -f .env || ! test -f docker-compose.yml; then
 		exit 1;
 fi 
 
+echo -e "\n"
+# Customizing .env
+if test -f .env; 
+	then
+		read -p "Do you want to customize your variable environment before the conversion to manifests?: "[y]
+		yn=${yn:-y}
+		while true; do
+			case $yn in
+				[Yy]* )
+					vi .env
+					break;;
+				[Nn]* )
+					break;;
+			esac
+		done
+fi
+
+echo "\n"
 echo "2> Définition du nom du projet"
 # NAME=$(cat docker-compose.yml | yq eval -o json | jq -r '[.services[]]| .[0].container_name' | cut -d'-' -f1)
 NAME=$2
@@ -183,6 +201,7 @@ echo -e "2> #################### Conversion initiale du $NAME.yml ##############
 docker-compose -f $NAME.yml convert --format json \
 | jq 'del(..|nulls)' \
 | jq --arg toto "$NAME" 'del (.services."\($toto)-watchtower")' \
+| jq 'del(.services[].volumes[]?|select(.source|test("sock")))' \
 | jq 'del (.services[]."depends_on")' \
 | jq 'del (.services."theses-elasticsearch-setupcerts")' \
 | jq 'del (.services."theses-elasticsearch-setupusers")' \
@@ -289,7 +308,6 @@ if [ -n "$3" ]; then
 		echo -e "\n"
 
 
-
 	# 5> Suppression des environnements et nettoyage final
 	echo -e "5> #################### Suppression des environnements et nettoyage final ####################\n"
 	cat $CLEANED \
@@ -317,8 +335,59 @@ echo -e "\n"
 message
 fi
 
-cat $CLEANED
+# cat $CLEANED
 echo -e "\n"
+    
+# Patch ReadOnlyMany pvc to ReadWriteOnly. The readOnly feature will be later executed with the "readOnly:"" true directive into deployment
+patch_RWO () {
+for i in $(grep ReadOnlyMany *persistent* |cut -d: -f1); 
+	do 
+		echo "Patching \n ReadOnlyMany modeAccess to ReadWriteOnce in $i......................................." 
+		sed -i 's/ReadOnlyMany/ReadWriteOnce/g' $i; 
+	done
+}
+
+patch_expose_auto () {
+    # services=$(docker-compose -f $CLEANED config | yq -o json| jq -r '.services|to_entries[]|.value|select((has("ports") or has("expose"))|not)?|."container_name"')
+    # if [[ -n $services ]]
+    #     then
+			for service in $services; 
+				do 
+					port=$(ssh root@$diplo docker inspect $service | jq -cr '[.[].NetworkSettings.Ports|to_entries[]|.key|split("/")|.[0]'])
+                    port=${port:-[]}
+                    if [[ $port != '[]' ]]
+                        then
+                            echo "Patching ports $port for service $service ............"
+                            cat $CLEANED | yq -o json | jq --arg service "$service" --argjson port "$port" '.services."\($service)".expose+=$port' \
+                            |sponge $CLEANED
+                    fi
+				done
+			cat $CLEANED | yq -P | sponge $CLEANED
+	# fi
+}
+
+patch_expose () {
+    # services=$(docker-compose -f $CLEANED config | yq -o json| jq -r '.services|to_entries[]|.value|select((has("ports") or has("expose"))|not)?|."container_name"')
+    # if [[ -n $services ]]
+    #     then
+    #         echo -e "The following services don't have any explicit defined ports: \n$services"
+            echo "You may define them one by one so as the conversion to be successfull"
+            for service in $services; 
+                do 
+                    read -p "$service: Enter port number to expose the service (press to leave empty): " port
+                    # port=${port:-[]}
+                    if [[ -n $service ]]
+                        then
+                            if [[ -n $port ]]
+                                then
+                                    cat $CLEANED | yq -o json | jq --arg service "$service" --arg port "$port" '.services."\($service)".expose+=[ "\($port)" ]' \
+                                    |sponge $CLEANED
+                            fi
+                    fi
+                done
+            cat $CLEANED | yq -P | sponge $CLEANED
+	# fi
+}
 
 # Patch *.txt file to remove '\n' character based in 64
 patch_secret () {
@@ -451,14 +520,33 @@ patch_configmaps() {
 		done
 }
 
+patch_configmaps_new () {
+for i in $(cat movies.yml | yq -ojson| jq -r '.services|keys[]')
+    do 
+        sources=$( cat movies.yml | yq -ojson| jq -r  --arg i $i '.services|to_entries[]|select(.key=="\($i)").value.volumes[]?|.source|split("/")|last' )
+        # echo $sources
+        for j in $sources
+            do
+                echo -e "patching ${i}-deployment.yaml with source $j......."
+                cat ${i}-deployment.yaml | yq -ojson | \
+                jq -r --arg i $i --arg j $j '((.spec.template.spec.containers[].volumeMounts[]?|select((.mountPath|test("(\\.[^.]+)$")) and (.name|test("claim")) )) |= {mountPath: .mountPath, name: ("\($i)-" + $j|gsub("_";"-")|gsub("\\.";"-")|ascii_downcase), subPath: $j })|.spec.template.spec.volumes+=[{configMap: {defaultMode: 420, name: ("\($i)-" + $j|gsub("_";"-")|gsub("\\.";"-")|ascii_downcase)}, name: ("\($i)-" + $j|gsub("_";"-")|gsub("\\.";"-")|ascii_downcase)}]' | yq -P | \
+                sponge ${i}-deployment.yaml 
+            done
+    done
+}
+
 create_configmaps() {
 	# echo "ETAPE 2: Création des object configMaps pour les volumes bind qui sont des fichiers et non des répertoires"
 
 	CM=$(cat $NAME.yml | yq -o json | jq -r --arg pwd "$NAME-docker-$1" '.services[].volumes|select(.!=null)|.[]|select(.type == "bind")|select(.source|test("(\\.[^.]+)$"))|select(.source|test("sock")|not).source|split($pwd)|.[1]?')
-	CM_RENAMED=$(cat $NAME.yml | yq -o json | jq -r --arg pwd "$NAME-docker-$1" '.services|to_entries[]|{name: .key, volumes: (.value|.volumes|select(.!=null)|.[]|select(.type == "bind")|select(.source|test("(\\.[^.]+)$"))|select(.source|test("sock")|not).source|split($pwd)|.[1])}|(.name + "-" + (.volumes|split("/")|last|gsub("\\/";"-")|gsub("\\.";"-")|gsub("\\_";"-")|ascii_downcase))')
+	# CM_RENAMED=$(cat $NAME.yml | yq -o json | jq -r --arg pwd "$NAME-docker-$1" '.services|to_entries[]|{name: .key, volumes: (.value|.volumes|select(.!=null)|.[]|select(.type == "bind")|select(.source|test("(\\.[^.]+)$"))|select(.source|test("sock")|not).source|split($pwd)|.[1])}|(.name + "-" + (.volumes|split("/")|last|gsub("\\/";"-")|gsub("\\.";"-")|gsub("\\_";"-")|ascii_downcase))')
+	CM_RENAMED=$(cat $NAME.yml | yq -o json | jq -r --arg pwd "$NAME-docker-$1" '.services|to_entries[]|{name: .key, volumes: (.value|.volumes|select(.!=null)|.[]|select(.type == "bind")|select(.target|test("(\\.[^.]+)$"))|select(.target|test("sock")|not).target|split("/")|last)}|(.name + "-" + (.volumes|split("/")|last|gsub("\\/";"-")|gsub("\\.";"-")|gsub("\\_";"-")|ascii_downcase))')
+	CM_RENAMED_short=$(cat $NAME.yml | yq -o json | jq -r --arg pwd "$NAME-docker-$1" '.services|to_entries[]|{name: .key, volumes: (.value|.volumes|select(.!=null)|.[]|select(.type == "bind")|select(.target|test("(\\.[^.]+)$"))|select(.target|test("sock")|not).target|split("/")|last)}|((.volumes|split("/")|last))')
+
 
 	declare -a tab_CM
 	declare -a tab_CM_RENAMED
+	declare -a tab_CM_RENAMED_short
 
 	index=-1
 	for i in $CM 
@@ -476,6 +564,14 @@ create_configmaps() {
 		done 
 	# echo ${tab_CM_RENAMED[@]}
 
+	index=-1
+	for i in $CM_RENAMED_short
+		do 
+			index=$(($index + 1))
+			tab_CM_RENAMED_short[$index]=$i
+		done 
+	# echo ${tab_CM_RENAMED[@]}
+
 
 	if [[ ! -d './volumes' ]]; 
 		then
@@ -487,7 +583,7 @@ create_configmaps() {
 	for ((i=0; i<=$index; i++ ))
 		do 
 			echo "creating configMap file ${tab_CM_RENAMED[$i]}-configmap.yaml ......................................."
-			oc create cm ${tab_CM_RENAMED[$i]} --from-file=./volumes/${tab_CM[$i]} --dry-run=client -o yaml > ${tab_CM_RENAMED[$i]}-configmap.yaml
+			oc create cm ${tab_CM_RENAMED[$i]} --from-file=./volumes/${tab_CM[$i]} --dry-run=client -o json  | jq -r --arg z  "${tab_CM_RENAMED_short[$i]}" '(if has("data") then .data|=with_entries(.key="\($z)") else .binaryData|=with_entries(.key="\($z)") end)' | yq -P > ${tab_CM_RENAMED[$i]}-configmap.yaml
 		done
 
 	fusermount -u volumes
@@ -496,7 +592,26 @@ create_configmaps() {
 }
 
 
-# 6> génération des manifests
+# 7> génération des manifests
+echo -e "7>#################### Génération des manifests ###################\n"
+
+services=$(cat $CLEANED | yq -o json| jq -r '.services|to_entries[]|.value|select((has("ports") or has("expose"))|not)?|."container_name"')
+if [[ -n $services ]]
+	then
+		echo -e "The following services don't have any explicit defined ports: \n$services"
+		read -p "Do you want to fetch ports from existing docker containers on $diplo : [y]" yn
+		yn=${yn:-y}
+		while true; do
+			case $yn in
+				[Yy]* )
+					patch_expose_auto
+					break;;
+				[Nn]* )
+					patch_expose
+					break;;
+			esac
+		done
+fi
 
 applis_svc=$(cat $NAME.yml | yq eval -ojson | \
 	jq -r '.services|to_entries[]| [{services: .key, volumes: .value.volumes[]|select(.source|test("/appli"))}]?|.[].services'|uniq)
@@ -510,6 +625,7 @@ if [ -n "$4" ] && [ "$4" = "kompose" ]; then
 	else
 		kompose -f $CLEANED convert
 	fi
+	patch_RWO
 	patch_secret
 	patch_secretKeys
 	patch_networkPolicy $1
@@ -518,6 +634,105 @@ if [ -n "$4" ] && [ "$4" = "kompose" ]; then
 	patch_configmaps $CLEANED
 	create_configmaps $1
 fi
+
+echo -e "6>#################### Patch multi-attached volumes ###################\n"
+
+# find targeted volumes 
+export volumes=$(cat $CLEANED | yq eval -o json | jq -r '.services|to_entries[]|.value|select(has("volumes"))|.volumes[]|select((.type)=="volume").source'|uniq)
+
+# find if there is a nfs csi driver installed on the cluster
+export nfs_csi=$(oc get csidrivers.storage.k8s.io -o json | jq -r '.items[].metadata|select(.name|test("nfs")).name')
+export nfs_sc=$(oc get sc -o json | jq --arg nfs_csi $nfs_csi -r '.items[]|select(.provisioner|test("\($nfs_csi)")).metadata.name')
+
+create_sc() {
+    read -p "Enter NFS server name [methana.v102.abes.fr]...........: " server_name
+    server_name=${server_name:-methana.v102.abes.fr}
+    read -p "Enter NFS share [/pool_SAS_2/OKD]............: " nfs_share
+    nfs_share=${nfs_share:-/pool_SAS_2/OKD}
+    cat <<EOF | oc apply -f -
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: nfs-csi
+provisioner: $1
+parameters:
+  server: $server_name
+  share: $nfs_share
+reclaimPolicy: Delete
+volumeBindingMode: Immediate
+mountOptions:
+  - nfsvers=4.1
+EOF
+}
+
+# find multi attached volume
+for i in $volumes
+    do number=$(cat $CLEANED | yq eval -o json | jq --arg i $i -r '.services|to_entries[]|.value|select(has("volumes"))|.volumes[]|=select((.type)=="volume")| {(.container_name): (.volumes[]|select(.type=="volume"))}|to_entries[]|select(.value.source==$i).key'|wc -l)
+     if test $number -gt 1
+        then echo "There is multi attachments for \"$i\" volume"
+             echo "A RWX csi driver is needed for multi-attachments PVC"
+            if [[ -n "$nfs_csi" ]]
+                then
+                    echo "\"$nfs_csi\" driver is installed to this k8s cluster"
+                    if [[ -n $nfs_sc ]];
+                        then 
+                            echo "There is an existing storage class $nfs_sc that points to"
+                            oc get sc -o json | jq --arg nfs_csi $nfs_csi -r '.items[]|select(.provisioner|test("\($nfs_csi)"))|(.parameters.server + ":" + .parameters.share)'
+                        else
+                            read -p "Do you want to create a nfs storage class using \"nfs.csi.k8s.io\" driver?.........:[y] " yn
+                            yn=${yn:-y}
+                            case $yn in
+                                [Yy]* )
+                                    create_sc nfs.csi.k8s.io
+                                    ;;
+                                [Nn]* )
+                                    echo "$new_i PVC will be installed by the default \"ovirt-csi\" stotage class in RWO mode, some container may not start because of this."
+                                    ;;
+                            esac
+                    fi
+                else
+                    while true; do
+                        read -p "Do you want to install the \"nfs.csi.k8s.io\" driver?(y/n)...............:[y] " yn
+                        yn=${yn:-y}
+                        case $yn in
+                            [Yy]* )
+                                echo "Downloading and installing nfs.csi.k8s.io driver to cluster"
+                                curl -skSL https://raw.githubusercontent.com/kubernetes-csi/csi-driver-nfs/v4.7.0/deploy/install-driver.sh | bash -s v4.7.0 --
+                            read -p "Do you want to create a nfs storage class using nfs.csi.k8s.io driver?.........:[y] " yn
+                            yn=${yn:-y}
+                            case $yn in
+                                [Yy]* )
+                                    create_sc nfs.csi.k8s.io
+                                    ;;
+                                [Nn]* )
+                                    echo "$new_i PVC will be installed by the default \"ovirt-csi\" stotage class in RWO mode, some container may not start because of this."
+                                    ;;
+                            esac
+                                break;;
+                            [Nn]* )
+                                echo "$new_i PVC will be installed by the default \"ovirt-csi\" stotage class in RWO mode, some container may not start because of this."
+                                ;;
+                        esac
+                    done
+            fi
+            while true; do
+                read -p "Do you want to use \"nfs-csi\" storage class for \"$i\" volume? (y/n)....................................:[y] " yn
+                yn=${yn:-y}
+                case $yn in
+                    [Yy]* )
+                        new_i=$(echo $i | sed 's/\./-/g' |sed 's/_/-/g')
+                        echo "patching nfs-csi in $new_i-persistentvolumeclaim.yaml......................................."
+                        cat $new_i-persistentvolumeclaim.yaml | yq -o json |jq  '.spec.storageClassName="nfs-csi"|.spec.accessModes=["ReadWriteMany"]' | yq -P | sponge $new_i-persistentvolumeclaim.yaml
+            			break;;
+                    [Nn]* )
+                        echo "$new_i PVC will be installed by the default \"ovirt-csi\" stotage class in RWO mode, some container may not start because of this."
+                        ;;
+                esac
+            done
+     fi 
+	done
+
 
 # 7> Calcul des tailles des disques persistants
 
@@ -544,6 +759,7 @@ for i in $SOURCES;
     do 
         SVC=$(echo $i | cut -d':' -f1)
         SRC=$(echo $i | cut -d':' -f2)
+		SRC_orig=$(echo $SRC|sed 's/-/\./g')
         index=$(($index + 1))
         # if [[ ! -d volume_$SVC ]]
         #     then 
@@ -557,7 +773,7 @@ for i in $SOURCES;
         # fi
 		if [[ $1 = "volume" ]]
 			then 
-				src="/var/lib/docker/volumes/${NAME}-docker_${SRC}/_data/"
+				src="/var/lib/docker/volumes/${NAME}-docker_${SRC_orig}/_data/"
         elif [[  $(echo $SRC |grep "./") != '' ]]
             then
 				src="/opt/pod/${NAME}-docker/${SRC}"
@@ -611,22 +827,35 @@ for i in "${tab4[@]}";
 		if [[ $1 = "bind" ]]
 			then
 				file="${service}-claim${index}-persistentvolumeclaim.yaml"
+				file_name="${service}-claim${index}"
 			else
 				file="${source}-persistentvolumeclaim.yaml"
+				file_name="${source}"
 		fi
 		if [[ $i != "null" ]]
 			then
-				cat ${file} | 
-					yq eval -ojson| 
-					jq --arg size "$size" '.spec.resources.requests.storage=$size'| 
-					yq eval -P |
-				sponge ${file} 
+				status=$(oc get pvc $file_name -o json | jq -r '.status.phase')
+				is_nfs=$(oc get pvc $file_name -o json | jq -r '.spec.storageClassName|test("nfs")')
+				while [ $status != "Bound" ]
+					do
+						status=$(oc get pvc $file_name -o json | jq -r '.status.phase')
+					done
+				if [[ $is_nfs != "true" ]]
+					then
+						echo "Resizing $file_name to $size ................"
+						cat ${file} | 
+							yq eval -ojson| 
+							jq --arg size "$size" '.spec.resources.requests.storage=$size'| 
+							yq eval -P |
+						sponge ${file}
+						oc apply -f ${file}
+				fi
 		fi
     done
 # }
 
-echo "Would you like to copy current data to okd volume of type $1 (may be long)? (y/n)......................................."
-read answer
+read -p "Would you like to copy current data to okd volume of type $1 (may be long)? (y/n).......................................[y]" answer
+answer=${answer:-y}
 if [[ "$answer" = "y" ]];
     then
 		# size_calculation $1
@@ -684,12 +913,11 @@ case $1 in
 esac
 )
 
-echo -e "Would you like to deploy $NAME on OKD $1?......................................."
+read -p "Would you like to deploy $NAME on OKD $1?.......................................[y] " answer
+answer=${answer:-y}
 echo -e "(You can alternatively do it later by manually entering: $choice)"
-echo "(y/n)"
 
-read answer
-if [[ "$answer" = "y" ]]; 
+if [[ "$answer" == "y" ]]; 
     then
         OKD=$(oc project 2>&1 >/dev/null)
         echo $OKD
@@ -769,9 +997,18 @@ echo -e "9>############################ Pods reload #######################\n"
 if [[ $answer != "y" ]]; then exit; fi
 echo "Restart all $NAME pods......................................." 
 oc rollout restart deploy
-oc get pods -w
-oc expose svc $NAME-front
-URL=$(oc get route -o json | jq --arg NAME "$NAME" -r '.items[]|.spec|select(.host|test("\($NAME)-front"))|.host')
+timeout 10 oc get pods -w
+echo -e "Here is the list of configured services: \n"
+oc get svc
+read -p "Enter a list of above services you want to expose: " services
+for i in $services
+	do
+		oc expose $i
+	done
+	
+# oc expose svc $NAME-front
+# URL=$(oc get route -o json | jq --arg NAME "$NAME" -r '.items[]|.spec|select(.host|test("\($NAME)-front"))|.host')
+URL=$(oc get route -o json | jq  -r '[.items[]|.spec]|first|.host')
 echo -e "Congratulations"
 echo -e "You can reach $NAME application at:\n"
 echo http://$URL
