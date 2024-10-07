@@ -52,15 +52,13 @@ fi
 shopt -s extglob
 # rm -rf !(.env|docker-compose.yml|*.sh|.git|.|..)
 rm -rf !(.env|docker-compose.yml|*.sh|.git|.|..)
-echo -e "\n"
-
 
 if [ "$3" = "clean" ]; then
 	echo "Cleaned Wordir";
 	exit;
 fi
 
-echo -e "\n"
+echo -e ""
 
 echo "ETAPE 2: Installation des pré-requis"
 install_bin () {
@@ -79,6 +77,11 @@ install_bin () {
 							 -O /usr/local/bin/ | \
 						tar xzf -
 						chmod +x {kubectl,oc};;
+				jc)
+						wget -q https://github.com/kellyjonbrazil/jc/releases/download/v1.25.3/jc-1.25.3-linux-x86_64.tar.gz \
+							 -O /usr/local/bin/ | \
+						tar xzf -
+						chmod +x jc;;
                 *)
                 ;;
         esac
@@ -105,39 +108,134 @@ install_bin () {
   case $1 in
           jq|yq) $1 --version;;
           kompose) echo "kompose $($1 version)";;
+		  jc) $1 -v |head -1;;
           *) $1 version;;
   esac
 }
 
-for i in jq yq docker-compose kompose oc; do install_bin $i; done
+for i in jq yq docker-compose kompose oc jc; do install_bin $i; done
 
-echo -e "\n"
+NAME=$2
+echo -e "Application to deploy: \"$NAME\"\n"
+
+echo "############################################"
+echo -e ""
+
+# Docker hosts identification
+docker_hosts=
+read -p "Please enter the list of your Docker hosts: " docker_hosts
+docker_hosts=${docker_hosts:-"diplotaxis1 diplotaxis2 diplotaxis3 diplotaxis4 diplotaxis5 diplotaxis6 diplotaxis7"}
 
 echo "ETAPE 3: Téléchargement du docker-compose"
 
 if [[ "$1" == "prod" ]] || [[ "$1" == "test" ]] || [[ "$1" == "dev" ]]; then
+
 		echo "##### Avertissement! #######################"
-		echo "Il faut que clé ssh valide sur tous les comptes root des diplotaxis{}-${1} pour continuer......................................."
+		echo "Il faut que clé ssh valide sur tous les comptes root des Docker hosts{} de ${1} pour continuer......................................."
 		read -p "Continuer? (y/n)...........[y]" continue
 		continue=${continue:-y}
 		if [[ "$continue" != "y" ]]; then 
-			echo "Please re-execute the script after having installed your ssh pub keys on diplotaxis{}-${1}"
+			echo "Please re-execute the script after having installed your ssh pub keys on Docker hosts de ${1}"
 			exit 1;
 		fi
+
+		echo -e ""
+
+		# echo -e "Testing SSH connexion to defined Docker hosts"
+		# # for i in {1..7}; \
+		# for i in $docker_hosts
+		# 	do 
+		# 	   SSH=$(ssh -q -o "BatchMode=yes" -o "ConnectTimeout=3" root@${i}-${1} "echo 2>&1" && echo "OK" )
+		# 	   if [[ $(echo $SSH) == "OK" ]]
+		# 	   		then 
+		# 				echo "Connexion to root@${i}-${1} ........... OK"
+		# 			else 
+		# 				echo "Connexion to root@${i}-${1} ........... NOK"
+		# 				echo "Please upload your public ssh key to root@${i}-${1}"
+		# 				read -p "Do you want to configure an existing key: [y]?" yn
+		# 				yn=${yn:-y}
+		# 				while true; do
+		# 				case $yn in
+		# 					[Yy]* )
+		# 						if [[ $( ls ~/.ssh | grep "id" ) == '' ]]
+		# 							then
+		# 								read -p "No pub keys have been found. Do you want to generate? [y]" yn3
+		# 								yn3=${yn3:-y}
+		# 								case $yn3 in
+		# 									[Yy]* )
+		# 										ssh-keygen;;
+		# 									[Nn]* )
+		# 										echo "You must first install some pub key before using this script"
+		# 										exit;;
+		# 								esac											
+		# 							else
+		# 								echo  "Here are the available public key in your home directory:"
+		# 								ls ~/.ssh/ |grep pub
+		# 								read -p "Do you want to copy them on host docker? [y]" yn2
+		# 								yn2=${yn2:-y}
+		# 								case $yn2 in
+		# 									[Yy]* )
+		# 										echo "Installing pub keys......."
+		# 										ssh-copy-id root@${docker_hosts}-${1}
+		# 										break;;
+		# 									[Nn]* )
+		# 										echo "You must first install some pub key before using this script"
+		# 										exit
+		# 										break;;
+		# 								esac
+		# 						fi;;
+
+		# 					[Nn]* )
+		# 						echo "You must first install some pub key before using this script"
+		# 						exit
+		# 						break;;							
+		# 				esac; done
+		# 		fi
+		# 	done
 		echo "Ok, let's go on!"
-		echo "Searching on which Docker host $NAME is curently running ......"
-		diplo=$(for i in {1..6}; \
-		do ssh root@diplotaxis$i-${1}.v106.abes.fr docker ps --format json | jq --arg toto "diplotaxis${i}-${1}" '{diplotaxis: ($toto), nom: .Names}'; \
-		done \
-		| jq -rs --arg var "$2" '[.[] | select(.nom | test("^\($var)-.*"))]|first|.diplotaxis'); \
-		echo -e "$NAME is running on $diplo\n"
-		mkdir $2-docker-${1} && cd $2-docker-${1}; \
-		echo "Getting docker-compose.file from GitHub.......................................";  \
+
+		echo ""
+		echo "Searching which Docker host \"$NAME\" is currently running on ......"
+
+		diplo=$( \
+				# for i in {1..6}; \
+				for i in $docker_hosts
+					do 
+						ssh root@${i}-${1} docker ps --format json | jq --arg toto "${i}-${1}" '{"docker_host": ($toto), nom: .Names}'; \
+					done \
+					| jq -rs --arg docker_hosts "$i" --arg var "$2" '[.[] | select(.nom | test("^\($var)-.*"))]|first|."docker_host"'
+				); \
+
+		echo -e "\"$NAME\" is running on $diplo\n"
+		mkdir $2-docker-${1} && cd $2-docker-${1}
+
+		fetch() {
+			if [[ -f "$1" ]];
+				then
+					echo "\"$1\" ready to be used"
+				else
+					if [[ $1 == "docker-compose.yml" ]]
+						then
+							echo "\"$1\" has not been found. Please check https://raw.githubusercontent.com/abes-esr/$2-docker/develop/docker-compose.yml and retry"
+					elif [[ $1 == ".env" ]]
+						then
+							echo "\"$1\" has not been found. Please check $diplo.v106.abes.fr:/opt/pod/$2-docker/.env and retry"
+					fi
+					exit
+			fi
+		}
+
+		echo "Fetching \"docker-compose.yml\" from GitHub.......................................";  \
 		wget -N https://raw.githubusercontent.com/abes-esr/$2-docker/develop/docker-compose.yml 2> /dev/null; \
-		echo $PWD; \
-		rsync -av root@$diplo.v106.abes.fr:/opt/pod/$2-docker/.env .; \
+		fetch "docker-compose.yml"
+		echo ""
+
+		echo "Fetching \".env\" from $diplo Docker host..........................................."
+		rsync -a root@$diplo.v106.abes.fr:/opt/pod/$2-docker/.env .; \
+		fetch ".env"
+
 elif [[ "$1" == local ]];then
-		echo "Enter a diplotaxis name"
+		echo "Enter a Docker host name"
 		read diplo
 		if ! [[ -f ./docker-compose.yml ]]; then
 			echo "If $2 is hosted on gitlab.abes.fr, you can download your docker-compose.yml (y/n).......................................?"
@@ -188,11 +286,6 @@ if test -f .env;
 fi
 
 echo -e "\n"
-echo "2> Définition du nom du projet"
-NAME=$2
-echo -e "projet: $NAME\n"
-
-echo "############################################"
 
 echo "ETAPE 3: Conversion du  en manifests Kubernetes"
 
@@ -502,6 +595,120 @@ spec:
 	fi
 }
 
+
+create_pv2() {
+nfs_mount_point=$(ssh root@$diplo mount | \
+					jc --mount | \
+					jq -r '.[]|select(.type|test("nfs"))
+					|{
+					  path: .filesystem|split(":")|last, 
+					  rep: .filesystem|split("/")|last|gsub("_";"-")|gsub("\\.";"-"),
+					  mount_point: .mount_point, 
+					  server: .filesystem|split(":")|first
+					 }' \
+				 )
+
+for i in $(echo $nfs_mount_point|jq -r '."mount_point"|split("/")|last')
+    do 
+		nfs_service=$(cat $2.yml | \
+					  yq -ojson | \
+					  jq -r --arg i "$i" '.services|to_entries[]|select(.value|has("volumes"))|select(.value.volumes[]|select(.source|test("\($i)")))?' )
+		if [[ -n $nfs_service ]]
+			then 
+				nfs_services=$nfs_service
+		fi
+		# echo $nfs_services|jq
+		# echo $i
+    done
+
+# echo $nfs_services|jq
+# Get project for pvc naming
+# project=$(oc config view --minify -o 'jsonpath={..namespace}')
+# index="-1"
+
+for i in $(echo $nfs_services|jq -r '.key'); do \
+# index=$((index +1))
+# echo "index: $index"
+# echo $i
+
+vol_nb=$(cat theses.yml|yq -ojson |jq --arg i "$i" --arg pwd "${PWD##*/}" -r '.services|to_entries[]
+		|select(.key=="theses-api-export")
+		|.value.volumes|length')
+
+for ((index=0; index<$vol_nb; index++ )); do \
+source=$(echo $nfs_services \
+		|jq --arg i "$i" --arg pwd "${PWD##*/}" --arg index "$index" -r \
+		'select(.key==$i)|(
+							if (.value.volumes[$index|tonumber].source|split("\($pwd)/")|.[1] != null) 
+							then .value.volumes[$index|tonumber].source|split("\($pwd)/")|.[1] 
+							else .value.volumes[$index|tonumber].source|split("/")|.[1] 
+							end
+						  )' \
+		)
+
+subpath=$(echo $nfs_services \
+		|jq --arg i "$i" --arg pwd "${PWD##*/}" --arg source "$source" --arg index "$index" -r \
+		'select(.key==$i)|(
+							if (.value.volumes[$index|tonumber].source|split("\($pwd)/")|.[1] != null) 
+							then .value.volumes[$index|tonumber].source|split("\($pwd)")|.[1]|split("\($source)")|last
+							else .value.volumes[$index|tonumber].source|split("\($source)")|last
+							end
+						  )' \
+		)
+# echo SUBPATH $subpath
+
+source_renamed=$(echo $source | sed 's/_/-/g' | sed 's/\./-/g' | tr '[:upper:]' '[:lower:]')
+echo "Creating $i-pv$index-nfs-$source_renamed-persistentvolume.yaml ........................................."
+cat <<EOF > $i-pv$index-nfs-$source_renamed-persistentvolume.yaml
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: $i-pv${index}-nfs-$source_renamed-$1
+spec:
+  capacity:
+    storage: 8Ti
+  accessModes:
+  - ReadWriteMany
+  nfs:
+    path: $(echo $nfs_mount_point |jq -r --arg source "$source" 'select("\(.mount_point)"|test("\($source)$")).path')
+    server: $(echo $nfs_mount_point |jq -r --arg source "$source" 'select("\(.mount_point)"|test("\($source)$")).server')
+  persistentVolumeReclaimPolicy: Retain
+EOF
+create_pvc_nfs $1
+patch_deploy_nfs $1
+done
+done 
+
+}
+
+create_pvc_nfs() {
+
+	echo "patching $source_renamed in $i-claim$index-nfs-persistentvolumeclaim.yaml ......................................."
+	cat $i-claim$index-persistentvolumeclaim.yaml | 
+		yq eval -ojson | 
+			jq --arg project "$project" --arg name "$i" --arg env "$1" --arg source_renamed "$source_renamed" --arg index "$index" \
+			'.metadata.name|="\($name)-claim\($index)-nfs-\($source_renamed)-\($env)"
+			|.metadata.labels."io.kompose.service"|="\($name)-claim\($index)-nfs-\($source_renamed)-\($env)"
+			|.spec.resources.requests.storage="8Ti"
+			|.spec.volumeName="\($name)-pv\($index)-nfs-\($source_renamed)-\($env)"
+			|.spec.storageClassName=""|.spec.accessModes=["ReadWriteMany"]' |
+		yq eval -P | sponge $i-claim$index-nfs-persistentvolumeclaim.yaml
+	echo "deleting $i-claim$index-persistentvolumeclaim.yaml"
+	rm -f $i-claim$index-persistentvolumeclaim.yaml
+}
+
+patch_deploy_nfs() {
+
+	oldname=$i-claim0
+	# echo $oldname
+	newname="$i-pv${index}-nfs-${source_renamed}-$1"
+	# echo $newname     
+	cat $i-deployment.yaml | yq -ojson | \
+							jq --arg newname "$newname" --arg oldname "$oldname" --arg subpath "$subpath" \
+							'(.spec.template.spec.containers[0].volumeMounts[]|select(.name=="\($oldname)"))+= ({subpath:"\($subpath)"}|.name|="\($newname)")|
+							 (.spec.template.spec.volumes[]|select(.name=="\($oldname)"))|=(.name|="\($newname)"|.persistentVolumeClaim.claimName|="\($newname)")' | yq -P | sponge $i-deployment.yaml
+}
+
 patch_configmaps() {
 
 	 for i in $(ls | grep "deployment")
@@ -533,20 +740,20 @@ patch_configmaps() {
 		done
 }
 
-patch_configmaps_new () {
-	for i in $(cat movies.yml | yq -ojson| jq -r '.services|keys[]')
-		do 
-			sources=$( cat movies.yml | yq -ojson| jq -r  --arg i $i '.services|to_entries[]|select(.key=="\($i)").value.volumes[]?|.source|split("/")|last' )
-			# echo $sources
-			for j in $sources
-				do
-					echo -e "patching ${i}-deployment.yaml with source $j......."
-					cat ${i}-deployment.yaml | yq -ojson | \
-					jq -r --arg i $i --arg j $j '((.spec.template.spec.containers[].volumeMounts[]?|select((.mountPath|test("(\\.[^.]+)$")) and (.name|test("claim")) )) |= {mountPath: .mountPath, name: ("\($i)-" + $j|gsub("_";"-")|gsub("\\.";"-")|ascii_downcase), subPath: $j })|.spec.template.spec.volumes+=[{configMap: {defaultMode: 420, name: ("\($i)-" + $j|gsub("_";"-")|gsub("\\.";"-")|ascii_downcase)}, name: ("\($i)-" + $j|gsub("_";"-")|gsub("\\.";"-")|ascii_downcase)}]' | yq -P | \
-					sponge ${i}-deployment.yaml 
-				done
-		done
-}
+# patch_configmaps_new () {
+# 	for i in $(cat movies.yml | yq -ojson| jq -r '.services|keys[]')
+# 		do 
+# 			sources=$( cat movies.yml | yq -ojson| jq -r  --arg i $i '.services|to_entries[]|select(.key=="\($i)").value.volumes[]?|.source|split("/")|last' )
+# 			# echo $sources
+# 			for j in $sources
+# 				do
+# 					echo -e "patching ${i}-deployment.yaml with source $j......."
+# 					cat ${i}-deployment.yaml | yq -ojson | \
+# 					jq -r --arg i $i --arg j $j '((.spec.template.spec.containers[].volumeMounts[]?|select((.mountPath|test("(\\.[^.]+)$")) and (.name|test("claim")) )) |= {mountPath: .mountPath, name: ("\($i)-" + $j|gsub("_";"-")|gsub("\\.";"-")|ascii_downcase), subPath: $j })|.spec.template.spec.volumes+=[{configMap: {defaultMode: 420, name: ("\($i)-" + $j|gsub("_";"-")|gsub("\\.";"-")|ascii_downcase)}, name: ("\($i)-" + $j|gsub("_";"-")|gsub("\\.";"-")|ascii_downcase)}]' | yq -P | \
+# 					sponge ${i}-deployment.yaml 
+# 				done
+# 		done
+# }
 
 create_configmaps() {
 	CM=$(cat $NAME.yml | yq -o json | jq -r --arg pwd "$NAME-docker-$1" '.services[].volumes|select(.!=null)|.[]|select(.type == "bind")|select(.source|test("(\\.[^.]+)$"))|select(.source|test("sock")|not).source|split($pwd)|.[1]?')
@@ -588,7 +795,7 @@ create_configmaps() {
 	fi
 	if [[ $index != -1 ]]
 		then
-			echo "Mounting root@$diplo.v106.abes.fr:/opt/pod/$NAME-docker/ ./volumes/"
+			echo "Mounting root@$diplo:/opt/pod/$NAME-docker/ ./volumes/"
 			sshfs root@$diplo.v106.abes.fr:/opt/pod/$NAME-docker/ ./volumes/
 			message
 
@@ -641,9 +848,13 @@ if [ -n "$4" ] && [ "$4" = "kompose" ]; then
 	patch_secret
 	patch_secretKeys
 	patch_networkPolicy $1
-	create_pv_applis $1
-	patch_pvc $1
+	# create_pv_applis $1
+	create_pv2 $1 $NAME
+	# patch_pvc $1
 	patch_configmaps $CLEANED
+
+	echo ""
+	
 	echo -e "ETAPE 2: Création des object configMaps pour les volumes bind qui sont des fichiers et non des répertoires"
 	create_configmaps $1
 fi
@@ -899,7 +1110,7 @@ fi
 }
 
 release_pv() {
-	for i in $(oc get pv -ojson | jq -r --arg $NAME "$NAME" '.items[].metadata|select(.name|test("applis-\($NAME)")).name')
+	for i in $(oc get pv -ojson | jq -r --arg NAME "$1" '.items[].metadata|select(.name|test("applis-\($NAME)")).name')
 		do
 			echo -e "Releasing pv applis-$i..........................................................\n"
 			oc patch pv $i -p '{"spec":{"claimRef": null}}'
