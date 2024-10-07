@@ -11,12 +11,12 @@ help () {
 	echo -e "dev|test|prod: \tenvironnement sur lequel récupérer le .env. Local: fournir manuellement les '.env' et 'docker-compose.yml'"
 	echo -e "appli_name: \t\tnom de l'application à convertir"
 	echo -e "default or '' : \tGenerates cleaned appli.yml compose file to plain k8s manifests "
-	echo -e "env_file: \t\tGenerates cleaned advanced appli.yml with migrating pflain 'environment' \n\t\t\tto 'env_file' statement, will be converted into k8s configmaps"
-	echo -e "secret: \t\tThe same as env_file, in addition generates advanced appli.yml with \n\t\t\tmigrating all vars containing 'PASSWORD' or 'KEY' as keyword to secret,\n\t\t\twill be converted into k8s secrets"
+	echo -e "env_file: \t\tGenerates cleaned advanced appli.yml with migrating pflain 'environment' \n\t\t\tto 'env_file' statement, will generate k8s \"configmaps\" for common vars and \"secrets\" for vars containing 'PASSWORD' or 'KEY' as keyword"
+	# echo -e "secret: \t\tThe same as env_file, in addition generates advanced appli.yml with \n\t\t\tmigrating all vars containing 'PASSWORD' or 'KEY' as keyword to secret,\n\t\t\twill be converted into k8s secrets"
 	echo -e "kompose: \t\tConverts appli.yml into plain k8s manifests ready to be deployed with \n\t\t\t'kubectl apply -f *.yaml"
 	echo -e "helm: \t\t\tKompose option that generates k8s manifest into helm skeleton for appli.yml\n"
-	echo -e "example: ./compose2manifests.sh local item secret kompose\n"
-	echo -e "example: ./compose2manifests.sh prod qualimarc secret kompose helm\n"
+	echo -e "example: ./compose2manifests.sh local item env_file kompose\n"
+	echo -e "example: ./compose2manifests.sh prod qualimarc default kompose helm\n"
 	exit 1
 }
 
@@ -121,77 +121,100 @@ echo -e "Application to deploy: \"$NAME\"\n"
 echo "############################################"
 echo -e ""
 
+testing_ssh() {
+
+echo "Checking ssh connectivity to Docker hosts to bind ...."
+for i in $docker_hosts
+	do 
+		SSH=$(ssh -q -o "BatchMode=yes" -o "ConnectTimeout=3" root@${i}-${1} "echo 2>&1" && echo "OK" )
+		if [[ $(echo $SSH) == "OK" ]]
+			then 
+				echo "Connexion to root@${i}-${1} ........... OK"
+			else 
+				echo "Connexion to root@${i}-${1} ........... NOK"
+				echo "Please upload your public ssh key to root@${i}-${1}"
+				read -p "Do you want to configure an existing key: [y]?" yn
+				yn=${yn:-y}
+				while true; do
+				case $yn in
+					[Yy]* )
+						if [[ $( ls ~/.ssh | grep "id" ) == '' ]]
+							then
+								read -p "No pub keys have been found. Do you want to generate? [y]" yn3
+								yn3=${yn3:-y}
+								case $yn3 in
+									[Yy]* )
+										ssh-keygen;;
+									[Nn]* )
+										echo "You must first install some pub key before using this script"
+										exit;;
+								esac											
+							else
+								echo  "Here are the available public key in your home directory:"
+								ls ~/.ssh/ |grep pub
+								read -p "Do you want to copy them on host docker? [y]" yn2
+								yn2=${yn2:-y}
+								case $yn2 in
+									[Yy]* )
+										echo "Installing pub keys......."
+										ssh-copy-id root@${docker_hosts}-${1}
+										break;;
+									[Nn]* )
+										echo "You must first install some pub key before using this script"
+										exit
+										break;;
+								esac
+						fi;;
+
+					[Nn]* )
+						echo "You must first install some pub key before using this script"
+						exit
+						break;;							
+				esac; done
+		fi
+	done
+
+}
+
 # Docker hosts identification
 docker_hosts=
 read -p "Please enter the list of your Docker hosts: " docker_hosts
 docker_hosts=${docker_hosts:-"diplotaxis1 diplotaxis2 diplotaxis3 diplotaxis4 diplotaxis5 diplotaxis6 diplotaxis7"}
 
+echo ""
+
+echo "##### Warning! #######################"
+read -p "Do you want to check ssh connectivity? If a host is not reacheable, pub key will be installed.[no]: " yn
+yn=${yn:-n}
+while true; do
+	case $yn in
+		[Yy]* )
+			testing_ssh $1
+			break;;
+		[Nn]* )
+			echo "Assuming Docker hosts are available without any password..."
+			break;;
+	esac
+done
+
+echo ""
+
 echo "ETAPE 3: Téléchargement du docker-compose"
+
 
 if [[ "$1" == "prod" ]] || [[ "$1" == "test" ]] || [[ "$1" == "dev" ]]; then
 
-		echo "##### Avertissement! #######################"
-		echo "Il faut que clé ssh valide sur tous les comptes root des Docker hosts{} de ${1} pour continuer......................................."
-		read -p "Continuer? (y/n)...........[y]" continue
-		continue=${continue:-y}
-		if [[ "$continue" != "y" ]]; then 
-			echo "Please re-execute the script after having installed your ssh pub keys on Docker hosts de ${1}"
-			exit 1;
-		fi
+		# echo "##### Avertissement! #######################"
+		# echo "Il faut que clé ssh valide sur tous les comptes root des Docker hosts{} de ${1} pour continuer......................................."
+		# read -p "Continuer? (y/n)...........[y]" continue
+		# continue=${continue:-y}
+		# if [[ "$continue" != "y" ]]; then 
+		# 	echo "Please re-execute the script after having installed your ssh pub keys on Docker hosts de ${1}"
+		# 	exit 1;
+		# fi
 
 		echo -e ""
 
-		# echo -e "Testing SSH connexion to defined Docker hosts"
-		# # for i in {1..7}; \
-		# for i in $docker_hosts
-		# 	do 
-		# 	   SSH=$(ssh -q -o "BatchMode=yes" -o "ConnectTimeout=3" root@${i}-${1} "echo 2>&1" && echo "OK" )
-		# 	   if [[ $(echo $SSH) == "OK" ]]
-		# 	   		then 
-		# 				echo "Connexion to root@${i}-${1} ........... OK"
-		# 			else 
-		# 				echo "Connexion to root@${i}-${1} ........... NOK"
-		# 				echo "Please upload your public ssh key to root@${i}-${1}"
-		# 				read -p "Do you want to configure an existing key: [y]?" yn
-		# 				yn=${yn:-y}
-		# 				while true; do
-		# 				case $yn in
-		# 					[Yy]* )
-		# 						if [[ $( ls ~/.ssh | grep "id" ) == '' ]]
-		# 							then
-		# 								read -p "No pub keys have been found. Do you want to generate? [y]" yn3
-		# 								yn3=${yn3:-y}
-		# 								case $yn3 in
-		# 									[Yy]* )
-		# 										ssh-keygen;;
-		# 									[Nn]* )
-		# 										echo "You must first install some pub key before using this script"
-		# 										exit;;
-		# 								esac											
-		# 							else
-		# 								echo  "Here are the available public key in your home directory:"
-		# 								ls ~/.ssh/ |grep pub
-		# 								read -p "Do you want to copy them on host docker? [y]" yn2
-		# 								yn2=${yn2:-y}
-		# 								case $yn2 in
-		# 									[Yy]* )
-		# 										echo "Installing pub keys......."
-		# 										ssh-copy-id root@${docker_hosts}-${1}
-		# 										break;;
-		# 									[Nn]* )
-		# 										echo "You must first install some pub key before using this script"
-		# 										exit
-		# 										break;;
-		# 								esac
-		# 						fi;;
-
-		# 					[Nn]* )
-		# 						echo "You must first install some pub key before using this script"
-		# 						exit
-		# 						break;;							
-		# 				esac; done
-		# 		fi
-		# 	done
 		echo "Ok, let's go on!"
 
 		echo ""
