@@ -11,7 +11,7 @@ help () {
 	echo -e "dev|test|prod: \tenvironnement sur lequel récupérer le .env. Local: fournir manuellement les '.env' et 'docker-compose.yml'"
 	echo -e "appli_name: \t\tnom de l'application à convertir"
 	echo -e "default or '' : \tGenerates cleaned appli.yml compose file to plain k8s manifests "
-	echo -e "env_file: \t\tGenerates cleaned advanced appli.yml with migrating pflain 'environment' \n\t\t\tto 'env_file' statement, will generate k8s \"configmaps\" for common vars and \"secrets\" for vars containing 'PASSWORD' or 'KEY' as keyword"
+	echo -e "env_file: \t\tGenerates cleaned advanced appli.yml with migrating plain 'environment' \n\t\t\tto 'env_file' statement, will generate k8s \"configmaps\" for common vars and \"secrets\" for vars containing 'PASSWORD' or 'KEY' as keyword"
 	# echo -e "secret: \t\tThe same as env_file, in addition generates advanced appli.yml with \n\t\t\tmigrating all vars containing 'PASSWORD' or 'KEY' as keyword to secret,\n\t\t\twill be converted into k8s secrets"
 	echo -e "kompose: \t\tConverts appli.yml into plain k8s manifests ready to be deployed with \n\t\t\t'kubectl apply -f *.yaml"
 	echo -e "helm: \t\t\tKompose option that generates k8s manifest into helm skeleton for appli.yml\n"
@@ -25,6 +25,23 @@ NAME=$2
 VARS_TYPE=$3
 KOMPOSE=$4
 HELM=$5
+
+# RED="31"
+# GREEN="32"
+MAGENTA="\e[35m"
+GREEN="\e[92m"
+YELLOW="\e[93m"
+BLUE="\e[94m"
+RED="\e[31m"
+CYAN="\e[36m"
+BOLDGREEN="\e[1;${GREEN}m"
+ITALICRED="\e[3;${RED}m"
+ENDCOLOR="\e[0m"
+FAINT="\e[2m"
+BOLD="\e[1m"
+ITALICS="\e[3m"
+
+
 
 case $NAME in
 	'' | help | --help)
@@ -40,9 +57,45 @@ case $VARS_TYPE in
 		help;;
 esac
 
-echo "###########################################"
-echo "ETAPE 1: Initialisation du projet..."
-echo "1> Nettoyage........................................"
+blue () {
+	echo -e "${BLUE}$1${ENDCOLOR}"
+}
+
+faint () {
+	echo -e "${FAINT}$1${ENDCOLOR}"
+}
+
+italics () {
+	echo -e "${ITALICS}$1${ENDCOLOR}"
+}
+
+bold () {
+	echo -e "${BOLD}$1${ENDCOLOR}"
+}
+
+step () {
+	echo -e "\n\n"${YELLOW}################################################################################################################################${ENDCOLOR}"
+${YELLOW}STEP $1: $2${ENDCOLOR}"
+}
+
+title () {
+	echo -e "\n${GREEN}$1> ##################################################${ENDCOLOR}
+${GREEN}############ $2 ${ENDCOLOR}
+${GREEN}#######################################################${ENDCOLOR}"
+}
+
+message () {
+	if [ $(echo $?) = "0" ]; 
+		then 
+			echo -e "${BLUE}...OK${ENDCOLOR}"; 
+		else echo -e "${RED}echec!!!${ENDCOLOR}"; 
+		exit 1;
+	fi 
+}
+
+step "1" "Project Initialization........"
+
+title "1.1" "Cleaning working dir" 
 if [ -f ./okd ]
 	then rm -rf okd
 fi
@@ -52,12 +105,13 @@ sshfs=$( mount | grep sshfs )
 if [ -n "$sshfs" ]
 	then
 		echo -e "There is one active sshfs mount, please unmount it before going on: \n"
-		echo -e "$sshfs"
+		blue "$sshfs"
 		exit 1
 fi
 shopt -s extglob
 # rm -rf !(.env|docker-compose.yml|*.sh|.git|.|..)
 rm -rf !(.env|docker-compose.yml|*.sh|.git|.|..)
+message
 
 if [ "$VARS_TYPE" = "clean" ]; then
 	echo "Cleaned Wordir";
@@ -66,7 +120,9 @@ fi
 
 echo -e ""
 
-echo "ETAPE 2: Installation des pré-requis"
+# echo "1.2> #################### Installation des pré-requis ####################"
+title "1.2" "Installation of pre-required features"
+
 install_bin () {
   if ! [ -f /usr/local/bin/$1 ] && ! [ -f /usr/bin/$1 ];then
         case $1 in
@@ -79,7 +135,7 @@ install_bin () {
                 kompose)
                         BIN="kubernetes/kompose/releases/download/v1.28.0/kompose-linux-amd64";;
 				oc)
-						wget -q okd-project/okd/releases/download/4.12.0-0.okd-2023-02-18-033438/openshift-client-linux-4.12.0-0.okd-2023-02-18-033438.tar.gz \
+						wget -q okd-project/okd/releases/download/4.G1263.0-0.okd-2023-02-18-033438/openshift-client-linux-4.12.0-0.okd-2023-02-18-033438.tar.gz \
 							 -O /usr/local/bin/ | \
 						tar xzf -
 						chmod +x {kubectl,oc};;
@@ -91,7 +147,7 @@ install_bin () {
                 *)
                 ;;
         esac
-        echo "Installing $1......................................."
+        echo "Installing $(blue $1)......................................."
         sudo wget -q https://github.com/${BIN} -O /usr/local/bin/$1 &&  sudo  chmod +x /usr/local/bin/$1
   fi
   if ! [ -f /usr/bin/sponge ];then
@@ -121,11 +177,33 @@ install_bin () {
 
 for i in jq yq docker-compose kompose oc jc; do install_bin $i; done
 
-echo -e "Application to deploy: \"$NAME\""
+echo -ne "Application to deploy: " 
+blue \"$NAME\"
 namespace=$(oc config view --minify -o 'jsonpath={..namespace}')
-echo -e "Namespace in use: \"$namespace\"\n"
+api=$(oc config view --minify -o 'jsonpath={..server}')
+echo -ne "Cluster k8s: "
+blue $api
+echo -ne "Namespace in use: "
+blue "\"$namespace\"\n"
+case $1 in
+	test|dev|prod)
+		echo -e "You will deploy appli $(blue \"$NAME\") from the Docker $(blue \"$1\") platform to\n$(blue \"$api\") k8s cluster in the $(blue \"$namespace\") namespace.\""
+		;;
+	local)
+		echo -e "You will deploy appli $(blue \"$NAME\") from a docker-compose.yml file and a .env file (provided by yourself) to $(blue \"$api\") k8s cluster in the $(blue \"$namespace\") namespace."
+		;;
+		*)
+		echo "Bad arguments"
+		exit;;
+esac
 
-echo "############################################"
+if [[ $(echo $namespace | grep $NAME > /dev/null && echo $?) != 0 ]];
+	then
+		echo -e "Warning: current OKD namespace $(blue \"$namespace\") may not correspond to the appli $(blue \"$NAME\") you are about to deploy.\n"
+		read -p "$(italics "?? Enter the name of a new namespace relative to $(blue \"$NAME\")"): " namespace
+		blue "$namespace"
+fi
+echo "################################################################################################################################"
 echo -e ""
 
 testing_ssh() {
@@ -136,45 +214,45 @@ for i in $docker_hosts
 		SSH=$(ssh -q -o "BatchMode=yes" -o "ConnectTimeout=3" root@${i}.${domain} "echo 2>&1" && echo "OK" )
 		if [[ $(echo $SSH) == "OK" ]]
 			then 
-				echo "Connexion to root@${i}.${domain} ........... OK"
+				echo "Connexion to root@${i}.${domain} ........... $(blue OK)"
 			else 
-				echo "Connexion to root@${i}.${domain} ........... NOK"
+				echo "Connexion to root@${i}.${domain} ........... $(red NOK)"
 				echo "Please upload your public ssh key to root@${i}.${domain}"
-				read -p "Do you want to configure an existing key: [y]?" yn
+				read -p "$(italics "?? Do you want to configure an existing key: $(faint "[y]")?")" yn
 				yn=${yn:-y}
 				while true; do
 				case $yn in
 					[Yy]* )
 						if [[ $( ls ~/.ssh | grep "id" ) == '' ]]
 							then
-								read -p "No pub keys have been found. Do you want to generate? [y]" yn3
+								read -p "$(italics "?? No pub keys have been found. Do you want to generate? $(faint "[y]")")" yn3
 								yn3=${yn3:-y}
 								case $yn3 in
 									[Yy]* )
 										ssh-keygen;;
 									[Nn]* )
-										echo "You must first install some pub key before using this script"
+										italics "You must first install some pub key before using this script"
 										exit;;
 								esac											
 							else
-								echo  "Here are the available public key in your home directory:"
+								italics  "Here are the available public key in your home directory:"
 								ls ~/.ssh/ |grep pub
-								read -p "Do you want to copy them on host docker? [y]" yn2
+								read -p "$(italics "?? Do you want to copy them on host docker? [y]")" yn2
 								yn2=${yn2:-y}
 								case $yn2 in
 									[Yy]* )
-										echo "Installing pub keys......."
+										italics "Installing pub keys......."
 										ssh-copy-id root@${i}.${domain}
 										break;;
 									[Nn]* )
-										echo "You must first install some pub key before using this script"
+										italics "You must first install some pub key before using this script"
 										exit
 										break;;
 								esac
 						fi;;
 
 					[Nn]* )
-						echo "You must first install some pub key before using this script"
+						italics "You must first install some pub key before using this script"
 						exit
 						break;;							
 				esac; done
@@ -185,14 +263,16 @@ for i in $docker_hosts
 
 # Docker hosts domain identification
 dom=$(hostname -d)
-read -p "Please enter the domain (default is the one of the bastion) [$dom]: " domain2
+read -p "$(italics "?? Please enter the domain (default is the one of the bastion) $(faint [$dom]): ")" domain2
 domain=${domain:-$dom}
-echo $domain
+blue $domain
 
 echo ""
 
-echo "##### Warning! #######################"
-read -p "Do you want to check ssh connectivity? If a host is not reacheable, pub key will be installed.[no]: " yn
+
+ask_testing_ssh() {
+echo "!!! Warning !!!"
+read -p "$(italics "?? Do you want to check ssh connectivity? If a host is not reacheable, pub key will be installed.[no]: ")" yn
 yn=${yn:-n}
 while true; do
 	case $yn in
@@ -204,11 +284,63 @@ while true; do
 			break;;
 	esac
 done
+}
 
-echo "$ENV"
+fetch() {
+	if [[ -f "$1" ]];
+		then
+			echo "$(blue \"$1\") ready to be used"
+		else
+			if [[ $1 == "docker-compose.yml" ]]
+				then
+					italics "\"$1\" has not been found. Please check https://raw.githubusercontent.com/abes-esr/$NAME-docker/develop/docker-compose.yml and retry"
+			elif [[ $1 == ".env" ]]
+				then
+					echo "$(blue \"$1\") has not been found. Please check $(blue $docker_host:/opt/pod/$NAME-docker/.env) and retry"
+			fi
+			exit
+	fi
+}
 
-echo "ETAPE 3: Téléchargement du docker-compose"
+get_running_docker() {
+		echo ""
+		read -p "$(italics "?? If you know the Docker host where \"$NAME\" is currently running on, please enter the hostname (not fqdn), else type \"enter\" to automatically find it: ")" hostname
+		# hostname=${hostname:-diplotaxis2-test}
+		if [ -z $hostname ]
+			then
+				docker_hosts=
+				read -p "$(italics "?? Please enter the list of your Docker hosts hostnames: ")" docker_hosts
+				docker_hosts=${docker_hosts:-"diplotaxis1 diplotaxis2 diplotaxis3 diplotaxis4 diplotaxis5 diplotaxis6 diplotaxis7"}
+				set -- $(echo $docker_hosts)
+				if [[ -n $ENV ]] && [[ "$ENV" != "local" ]]; 
+					then
+						set -- "${@/%/-$ENV}"
+				fi
+				docker_hosts=$(echo $@)
+				blue "$docker_hosts"
+				title "1.4" "SSH connexion validation"
+				ask_testing_ssh
+				echo "Searching which Docker host \"$NAME\" is currently running on ......"
 
+				NAME_SHORT=$(echo $NAME | cut -d"-" -f1)
+
+				diplo=$( \
+						# for i in {1..6}; \
+						for i in $docker_hosts
+							do 
+								ssh root@${i}.${domain} docker ps --format json | jq --arg i "${i}" '{"docker_host": ($i), nom: .Names}'; \
+							done \
+							| jq -rs --arg docker_hosts "$i" --arg var "$NAME_SHORT" '[.[] | select(.nom | test("^\($var)-.*"))]|first|."docker_host"'
+						); \
+			else
+				diplo="$hostname"
+		fi
+
+		blue "\"$NAME\" is running on $diplo\n"
+		mkdir $NAME-docker-${ENV} && cd $NAME-docker-${ENV}
+
+		docker_host="${diplo}.${domain}"
+}
 
 if [[ "$ENV" == "prod" ]] || [[ "$ENV" == "test" ]] || [[ "$ENV" == "dev" ]]; then
 
@@ -225,90 +357,102 @@ if [[ "$ENV" == "prod" ]] || [[ "$ENV" == "test" ]] || [[ "$ENV" == "dev" ]]; th
 
 		echo "Ok, let's go on!"
 
-		echo ""
-		read -p "If you know the Docker host where \"$NAME\" is currently running on, please enter the hostname (not fqdn), else type \"enter\" to automatically find it: " hostname
-		if [ -z $hostname ]
-			then
-				docker_hosts=
-				read -p "Please enter the list of your Docker hosts hostnames: " docker_hosts
-				docker_hosts=${docker_hosts:-"diplotaxis1 diplotaxis2 diplotaxis3 diplotaxis4 diplotaxis5 diplotaxis6 diplotaxis7"}
-				set -- $(echo $docker_hosts)
-				if [[ -n $ENV ]]; 
-					then
-						set -- "${@/%/-$ENV}"
-				fi
-				docker_hosts=$(echo $@)
-				echo "Searching which Docker host \"$NAME\" is currently running on ......"
+		title "1.3" "Docker host search"
+		get_running_docker
 
-				NAME_SHORT=$(echo $NAME | cut -d"-" -f1)
-				diplo=$( \
-						# for i in {1..6}; \
-						for i in $docker_hosts
-							do 
-								ssh root@${i}.${domain} docker ps --format json | jq --arg i "${i}" '{"docker_host": ($i), nom: .Names}'; \
-							done \
-							| jq -rs --arg docker_hosts "$i" --arg var "$NAME_SHORT" '[.[] | select(.nom | test("^\($var)-.*"))]|first|."docker_host"'
-						); \
-			else
-				diplo="$hostname"
-		fi
-
-		echo -e "\"$NAME\" is running on $diplo\n"
-		mkdir $NAME-docker-${ENV} && cd $NAME-docker-${ENV}
-
-		docker_host="${diplo}.${domain}"
-
-		fetch() {
-			if [[ -f "$1" ]];
-				then
-					echo "\"$1\" ready to be used"
-				else
-					if [[ $1 == "docker-compose.yml" ]]
-						then
-							echo "\"$1\" has not been found. Please check https://raw.githubusercontent.com/abes-esr/$NAME-docker/develop/docker-compose.yml and retry"
-					elif [[ $1 == ".env" ]]
-						then
-							echo "\"$1\" has not been found. Please check $docker_host:/opt/pod/$NAME-docker/.env and retry"
-					fi
-					exit
-			fi
-		}
-
-		echo "Fetching \"docker-compose.yml\" from GitHub.......................................";  \
-		wget -N https://raw.githubusercontent.com/abes-esr/$NAME-docker/develop/docker-compose.yml 2> /dev/null; \
-		fetch "docker-compose.yml"
-		echo ""
+		read -p "$(italics "?? Choose docker-compose.yml method $(faint "[docker_host)|github]"): ")" method
+		method=${method:-docker_host}
+		blue "$method"
+		case $method in 
+			github )
+				italics "Fetching \"docker-compose.yml\" from GitHub.......................................";  \
+				wget -N https://raw.githubusercontent.com/abes-esr/$NAME-docker/develop/docker-compose.yml 2> /dev/null; \
+				fetch "docker-compose.yml"
+				echo "";;
+			docker_host )
+				echo "Fetching \"docker-compose.yml\" from $docker_host .......................................";  \
+				read -p "$(italics "?? Enter docker-compose.yml path on host \"$docker_host\" $(faint [/opt/pod/$NAME-docker]): ")" path
+				path=${path:-/opt/pod/$NAME-docker}
+				rsync -a root@$docker_host:$path/docker-compose.yml . ; \
+				fetch "docker-compose.yml"
+				echo "";;
+		esac
 
 		echo "Fetching \".env\" from $docker_host Docker host..........................................."
 		rsync -a root@$docker_host:/opt/pod/$NAME-docker/.env .; \
 		fetch ".env"
+		echo ""
 
 elif [[ "$ENV" == local ]];then
-		echo "Enter a Docker host name"
-		read docker_host
-		if ! [[ -f ./docker-compose.yml ]]; then
-			echo "If $NAME is hosted on gitlab.abes.fr, you can download your docker-compose.yml (y/n).......................................?"
-			read rep
-			if [[ "$rep" == "y" ]];then
-				echo "Please provide your gitlab private token (leave empty if public repo)......................................."
-				read token
-				ID=$(curl -s --header "PRIVATE-TOKEN: $token" https://git.abes.fr/api/v4/projects | \
-				jq -r --arg name "$NAME" '.[] | select(.name==$name)| .id')
-				curl -s --header "PRIVATE-TOKEN: $token" https://git.abes.fr/api/v4/projects/${ID}/repository/files/docker-compose.yml/raw?ref=main > docker-compose.yml
-				vi docker-compose.yml
-				if ! [[ -f ./.env ]];then
-					echo "Please manually provide a valid \".env\" file in the same directory as docker-compose.yml file ($pwd)"
-					exit 1
-				fi
+		get_running_docker
+		if ! [[ -f ../docker-compose.yml ]]; then
+				echo "There is no current docker-compose.yml file for \"$NAME\" in $(pwd)"
+				read -p "$(italics "?? Choose docker-compose.yml method $(faint "[docker_host|gitlab|manual]"): ")" method
+				method=${method:-docker_host}
+				case $method in 
+					gitlab )
+						read -p "$(italics "?? If $NAME is hosted on gitlab.abes.fr, you can download your docker-compose.yml $(faint "(y/n)").......................................?")" rep
+						if [[ "$rep" == "y" ]];then
+							read -p "$(italics "?? Please provide your gitlab private token (leave empty if public repo):....................................... ")" token
+							ID=$(curl -s --header "PRIVATE-TOKEN: $token" https://git.abes.fr/api/v4/projects | \
+							jq -r --arg name "$NAME" '.[] | select(.name==$name)| .id')
+							curl -s --header "PRIVATE-TOKEN: $token" https://git.abes.fr/api/v4/projects/${ID}/repository/files/docker-compose.yml/raw?ref=main > docker-compose.yml
+							vi docker-compose.yml
+						else
+							echo "Can't continue... You may previously manually copy your \"docker-compose.yml\" and \".env\" file into $pwd"
+							exit 1
+						fi ;;
+					docker_host ) 
+						echo "Fetching \"docker-compose.yml\" from $docker_host .......................................";  \
+						read -p "$(italics "?? Enter docker-compose.yml path on host \"$docker_host\" $(faint "[/opt/pod/$NAME-docker]"): ")" path
+						path=${path:-/opt/pod/$NAME-docker}
+						rsync -a root@$docker_host:$path/docker-compose.yml . ; \
+						fetch "docker-compose.yml"
+						echo "";;
+					manual )
+						echo "Please manually copy the docker-compose.yml to $PWD and re-execute this script"
+						exit;;
+				esac
 			else
-				echo "You may manually copy your \"docker-compose.yml\" and \".env\" file into $pwd"
-				exit 1
-			fi
+				cat ../docker-compose.yml |egrep -i "^$NAME$"
+				if [ "$?" == 0 ];
+					then
+						echo "\"docker-compose.yml\" is already present and ready to be used for \"$NAME\".... "
+					else
+						echo "\"docker-compose.yml\" is already present but doesn't seem to belong to \"$NAME\".... "
+						read -p "$(italics "?? Do you want to continue anyway? $(faint "[n]")")" yn
+						if [ "$yn" == "n" ]; then echo -e "Please check \"$(cd .. && pwd)/docker-compose.yml\" content.\nExiting" ; exit; fi
+
+				fi
 		fi
-		if ! [[ -f .env ]];then
-			echo "Please provide a valid \".env\" file to continue"
-			exit 1;
+
+		if ! [[ -f ../.env ]];then
+			echo "Choose \".env\" method [docker_host|manual]: " method
+			method=${method:-docker_host}
+			case $method in 
+				docker_host )
+						echo "Fetching \".env\" from $docker_host .......................................";  \
+						read -p "$(italics "?? Enter docker-compose.yml path on host \"$docker_host\" $(faint "[/opt/pod/$NAME-docker]]"): ")" path
+						path=${path:-/opt/pod/$NAME-docker}
+						rsync -a root@$docker_host:$path/.env . ; \
+						fetch ".env"
+						echo "";;
+				manual )
+						echo "Please manually provide a valid \".env\" file in the same directory as docker-compose.yml file ($PWD)"
+						exit 1;;
+			esac
+			else
+				cat ../.env |egrep -i "^$NAME$"
+				if [ "$?" == 0 ];
+					then
+						echo "\".env\" is already present and ready to be used for \"$NAME\".... "
+					else
+						echo "\".env\" is already present but doesn't seem to belong to \"$NAME\".... "
+						read -p "$(italics "?? Do you want to continue anyway? $(faint "[n]")")" yn
+						if [ "$yn" == "n" ]; then echo -e "Please check \"$(cd .. && pwd)/.env\" content. \nExiting..." ; exit; fi
+				fi
 		fi
+
 elif [[ "$ENV" != "local" ]]; then
 		echo "Valid verbs are 'github' or 'local'"
 		exit 1;
@@ -321,7 +465,7 @@ echo  ""
 # Customizing .env
 if test -f .env; 
 	then
-		read -p "Do you want to customize your variable environment before the conversion to manifests?: [n] " yn
+		read -p "$(italics "?? Do you want to customize your variable environment before the conversion to manifests?: $(faint "[n]") ")" yn
 		yn=${yn:-n}
 		while true; do
 			case $yn in
@@ -336,43 +480,43 @@ fi
 
 echo -e "\n"
 
-echo "ETAPE 3: Conversion du  en manifests Kubernetes"
+step "2" "Conversion des variables en objet secrets et configMaps"
 
-message () {
-	if [ $(echo $?) = "0" ]; 
-		then 
-			echo "...OK"; 
-		else echo "echec!!!"; 
-		exit 1;
-	fi 
-}
-
-# 1> Résolution du .env
-echo -e "1> #################### Résolution du .env ####################\n"
-docker-compose config | sed 's/\.svc//g'> $NAME.yml
+title "2.1" ".env resolution"
+docker-compose config --format json | yq -o json \
+									| jq 	'.services
+											|=with_entries(
+															.key=(
+																if .value|has("container_name") 
+																then .value."container_name" 
+																else . 
+																end)
+															)' \
+											| yq -P \
+											| sed 's/\.svc//g'> $NAME.yml
 message
-# 2> Conversion initiale du docker-compose.yml
-echo -e "2> #################### Conversion initiale du $NAME.yml ####################\n"
-cat $NAME.yml | yq -ojson \
-| jq 'del(..|nulls)' \
-| jq --arg toto "$NAME" 'del (.services."\($toto)-watchtower")' \
-| jq 'del(.services[].volumes[]?|select(.source|test("sock")))' \
-| jq 'del (.services[]."depends_on")' \
-| jq 'del (.services."theses-elasticsearch-setupcerts")' \
-| jq 'del (.services."theses-elasticsearch-setupusers")' \
-| jq 'del (.services."theses-api-diffusion-poc")' \
-| jq 'del (.services[].mem_limit)'\
-| jq '(if has("volumes") then .volumes|=with_entries(.key|=gsub("\\.";"-")) else . end)' \
-| jq '.services[].volumes[]?|=(if .type=="bind" then . else .source|=gsub("\\.";"-") end)' \
-| jq '.services|=with_entries(.value|=(select(has("volumes")).volumes |= sort_by((.type)) ))' \
-| jq '.services|=with_entries(.key=(if .value|has("container_name") then .value."container_name" else . end))' \
-| yq -P | sponge $NAME.yml
+# 2> Conversion initiale du docker-compose.yml # | jq 'del (.services[].mem_limit)'\
+
+title "2.2" "Cleaning of $NAME.yml"
+
+cat $NAME.yml \
+			| yq -ojson \
+			| jq --arg name "$NAME"  'del (.services."\($name)-watchtower")
+									| del(..|nulls)
+									| del(.services[].volumes[]?|select(.source|test("sock")))
+									| del(.services[]."depends_on")
+									| del(.services."theses-elasticsearch-setupcerts")
+									| del(.services."theses-elasticsearch-setupusers")
+									| del(.services."theses-api-diffusion-poc")
+									| (if has("volumes") then .volumes|=with_entries(.key|=gsub("\\.";"-")) else . end)
+									| .services[].volumes[]?|=(if .type=="bind" then . else .source|=gsub("\\.";"-") end)
+									| .services|=with_entries(.value|=(select(has("volumes")).volumes |= sort_by((.type)) ))' \
+			| yq -P | sponge $NAME.yml
 
 # echo -e "NAME: \n$(cat $NAME.yml)"
 # exit
 
 message
-echo -e "\n"
 
 #### NBT 231108
 #### insertion de la clé "secrets" dans chacun des services de docker-compose.yml
@@ -399,47 +543,48 @@ if [ -n "$VARS_TYPE" ] && [ "$VARS_TYPE" == 'env_file' ]
 							| jq -s )
 			message
 
-	# 		###### obtention d une paire KEY:services #######
-	# 		PAIR_LIST=$(for i in $(echo $FILTER_LIST | jq -r '.[].value.key' ); \
-	# 				do tata=$(echo $FILTER_LIST | jq -r --arg toto "$i" '.[] |select(.value.key==$toto)|.key'); \
-	# 					for j in $tata; do echo "$i:$j"; \
-	# 							done; \
-	# 				done | sort -u )
-	# 		message
+			# ###### obtention d une paire KEY:services #######
+			# PAIR_LIST=$(for i in $(echo $FILTER_LIST | jq -r '.[].value.key' ); \
+			# 		do tata=$(echo $FILTER_LIST | jq -r --arg toto "$i" '.[] |select(.value.key==$toto)|.key'); \
+			# 			for j in $tata; do echo "$i:$j"; \
+			# 					done; \
+			# 		done | sort -u )
+			# message
 
-	# 		###### Injection dans le json #####
-	# 		for i in $(echo $PAIR_LIST); \
-	# 			do export KEY=$(echo $i| cut -d':' -f1); \
-	# 			export service=$(echo $i| cut -d':' -f2-); \
-	# 			cat $CLEANED | yq eval - -o json| jq --arg toto "$service" --arg tata "$KEY" '.services[$toto].secrets |= . + [$tata|ascii_downcase|gsub("_";"-")]' \
-	# 				| yq eval - -P | sponge $CLEANED; \
-	# 			done
-	# 		message
+			# ###### Injection dans le json #####
+			# for i in $(echo $PAIR_LIST); \
+			# 	do export KEY=$(echo $i| cut -d':' -f1); \
+			# 	export service=$(echo $i| cut -d':' -f2-); \
+			# 	cat $CLEANED | yq eval - -o json| jq --arg toto "$service" --arg tata "$KEY" '.services[$toto].secrets |= . + [$tata|ascii_downcase|gsub("_";"-")]' \
+			# 		| yq eval - -P | sponge $CLEANED; \
+			# 	done
+			# message
 		
 			###### Generating secret files from .env file  #####
 			export var=$(echo $FILTER_LIST | jq  -r '.[].value.key') \
 			# export data=$(echo $FILTER_LIST | jq  -r '.[].value.value') \
 			for i in $(echo $var); \
-			do export data=$(echo $FILTER_LIST | jq --arg tata "$i" -r '[.[].value | select(.key==$tata).value]|first')
-				echo $data > $(echo $i| sed 's/_/-/g' | tr '[:upper:]' '[:lower:]').txt; \
-				cat $CLEANED \
-				| yq eval - -o json \
-				| jq --arg i $i '.secrets[$i|ascii_downcase|gsub("_";"-")].file = ($i|ascii_downcase|gsub("_";"-")) + ".txt"' \
-				| yq eval - -P \
-				| sponge $CLEANED; \
-			done
+				do 
+					export data=$(echo $FILTER_LIST | jq --arg tata "$i" -r '[.[].value | select(.key==$tata).value]|first')
+					echo $data > $(echo $i| sed 's/_/-/g' | tr '[:upper:]' '[:lower:]').txt; \
+					cat $CLEANED \
+					| yq eval - -o json \
+					| jq --arg i $i '.secrets[$i|ascii_downcase|gsub("_";"-")].file = ($i|ascii_downcase|gsub("_";"-")) + ".txt"' \
+					| yq eval - -P \
+					| sponge $CLEANED; \
+				done
 			message
 	# 	fi
 
 		########### Conversion du environment en env_file ############
 
 		# 3> Génération des {service}.env à partir du docker-compose.yml
-		echo -e "3> #################### Génération des {service}.env ####################\n"
+		title "2.3" "Generation of \${services}.env"
 		for i in $(cat $CLEANED|yq eval -ojson|jq -r --arg var "$i" '.services|to_entries|map(select(.value.environment != null)|.key)|flatten[]'); \
 			do 	cat $CLEANED | \
 				yq eval - -o json |\
 				jq -r --arg var "$i" '.services[$var].environment' | \
-				# egrep -v 'KEY|PASSWORD' | \
+				# egrep -v 'KEY|PASS|SECRET' | \
 				yq eval - -P| \
 				sed "s/:\ /=/g" > $i.env; 
 			done
@@ -457,7 +602,7 @@ if [ -n "$VARS_TYPE" ] && [ "$VARS_TYPE" == 'env_file' ]
 			done 
 
 		# 4> Déclaration des {services.env} dans docker-compose.yml
-		echo -e "4> #################### Déclaration des {services.env} ####################\n"
+		title "3.4" "Declaration of \${services}.env into deployments"
 		for i in $(cat $CLEANED|yq eval -ojson|jq -r --arg var "$i" '.services|to_entries|map(select(.value.environment != null)|.key)|flatten[]'); \
 			do echo $i; cat $CLEANED | \
 						yq eval - -o json | \
@@ -465,11 +610,9 @@ if [ -n "$VARS_TYPE" ] && [ "$VARS_TYPE" == 'env_file' ]
 						sponge $CLEANED ; \
 			done
 		message
-		echo -e "\n"
-
 
 	# 5> Suppression des environnements et nettoyage final
-	echo -e "5> #################### Suppression des environnements et nettoyage final ####################\n"
+	title "3.5" "Cleaning"
 	cat $CLEANED \
 	| jq 'del (.services[].environment)' \
 	| jq 'del(.networks)' \
@@ -491,11 +634,8 @@ cat $CLEANED \
 | jq 'del(.services[].labels."com.centurylinklabs.watchtower.scope")' \
 | yq eval - -P | sponge $CLEANED
 
-echo -e "\n"
 message
 fi
-
-echo -e "\n"
     
 # Patch ReadOnlyMany pvc to ReadWriteOnly. The readOnly feature will be later executed with the "readOnly:"" true directive into deployment
 patch_RWO () {
@@ -516,8 +656,8 @@ patch_expose_auto () {
                     port=${port:-[]}
                     if [[ $port != '[]' ]]
                         then
-                            echo "Patching ports $port for service $service ............"
-                            cat $CLEANED | yq -o json | jq --arg service "$service" --argjson port "$port" '.services."\($service)".expose+=$port' \
+                            blue "Patching ports $port for service $service ............"
+                            cat $CLEANED | yq -o json| jq | jq --arg service "$service" --argjson port "$port" '.services."\($service)".expose+=$port' \
                             |sponge $CLEANED
                     fi
 				done
@@ -533,7 +673,7 @@ patch_expose () {
             echo "You may define them one by one so as the conversion to be successfull"
             for service in $services; 
                 do 
-                    read -p "$service: Enter port number to expose the service (press to leave empty): " port
+                    read -p "$(italics "?? $service: Enter port number to expose the service $(faint "(press to leave empty)"): ")" port
                     # port=${port:-[]}
                     if [[ -n $service ]]
                         then
@@ -588,17 +728,18 @@ patch_secretKeys () {
 # Patch networkpolicy to allow ingress
 	patch_networkPolicy () {
 	echo "patching ingress in $NAME-docker-$ENV-default-networkpolicy.yaml......................................."
-	if [[ $ENV != "local" ]]
-		then 
-			NETWORK=$NAME-docker-$ENV-default-networkpolicy.yaml
-		else
-			NETWORK=okd-default-networkpolicy.yaml
-	fi
+	# if [[ $ENV != "local" ]]
+	# 	then 
+	# 		NETWORK=$NAME-docker-$ENV-default-networkpolicy.yaml
+	# 	else
+	# 		NETWORK=okd-default-networkpolicy.yaml
+	# fi
+	NETWORK=$(ls | grep networkpolicy)
 	cat $NETWORK | 
 		yq eval -ojson | 
 		jq '.spec.ingress|=
 				map(.from |= .+ [{"namespaceSelector":{"matchLabels":{ "policy-group.network.openshift.io/ingress": ""}}}])'|
-		yq eval -P | sponge $NAME-docker-$ENV-default-networkpolicy.yaml
+		yq eval -P | sponge $NETWORK
 }
 
 # Patch pvc pour /appli
@@ -650,7 +791,7 @@ spec:
 
 
 create_pv2() {
-nfs_mount_point=$(ssh root@$docker_host mount | \
+nfs_mount_points=$(ssh root@$docker_host mount | \
 					jc --mount | \
 					jq -r '.[]|select(.type|test("nfs"))
 					|{
@@ -661,7 +802,7 @@ nfs_mount_point=$(ssh root@$docker_host mount | \
 					 }' \
 				 )
 
-for i in $(echo $nfs_mount_point|jq -r '."mount_point"|split("/")|last')
+for i in $(echo $nfs_mount_points|jq -r '."mount_point"|split("/")|last')
     do 
 		nfs_service=$(cat $2.yml | \
 					  yq -ojson | \
@@ -685,7 +826,7 @@ for i in $(echo $nfs_services|jq -r '.key'); do \
 vol_nb=$(cat $NAME.yml|yq -ojson |jq --arg i "$i" --arg pwd "${PWD##*/}" -r '.services|to_entries[]
 		|select(.key=="\($i)")
 		|.value.volumes|length')
-echo vol_nb: $vol_nb
+# echo vol_nb: $vol_nb
 
 for ((index=0; index<$vol_nb; index++ )); do \
 source=$(echo $nfs_services \
@@ -698,8 +839,8 @@ source=$(echo $nfs_services \
 						  )' \
 		)
 
-NFS_PATH=$(echo $nfs_mount_point |jq -r --arg source "$source" 'select("\(.mount_point)"|test("\($source)$")).path')
-NFS_SERVER=$(echo $nfs_mount_point |jq -r --arg source "$source" 'select("\(.mount_point)"|test("\($source)$")).server')
+NFS_PATH=$(echo $nfs_mount_points |jq -r --arg source "$source" 'select("\(.mount_point)"|test("\($source)$")).path')
+NFS_SERVER=$(echo $nfs_mount_points |jq -r --arg source "$source" 'select("\(.mount_point)"|test("\($source)$")).server')
 
 subpath=$(echo $nfs_services \
 		|jq --arg i "$i" --arg pwd "${PWD##*/}" --arg source "$source" --arg index "$index" -r \
@@ -905,14 +1046,16 @@ patch_labels() {
 }
 
 
-# 7> génération des manifests
-echo -e "7>#################### Génération des manifests ###################\n"
+#Génération des manifests
+step "3" "Docker-compose.yml conversion into Kubernetes manifests with the Kompose tool"
 
+
+title "3.1" "Creating missing network manifests"
 services=$(cat $CLEANED | yq -o json| jq -r '.services|to_entries[]|.value|select((has("ports") or has("expose"))|not)?|."container_name"')
 if [[ -n $services ]]
 	then
 		echo -e "The following services don't have any explicit defined ports: \n$services"
-		read -p "Do you want to fetch ports from existing docker containers on $docker_host : [y]" yn
+		read -p "$(italics "?? Do you want to fetch ports from existing docker containers on $docker_host : $(faint "[y]")")" yn
 		yn=${yn:-y}
 		while true; do
 			case $yn in
@@ -926,12 +1069,14 @@ if [[ -n $services ]]
 		done
 fi
 
+sleep 2
+
 applis_svc=$(cat $NAME.yml | yq eval -ojson | \
 	jq -r '.services|to_entries[]| [{services: .key, volumes: .value.volumes[]|select(.source|test("/appli"))}]?|.[].services'|uniq)
 applis_source=$(cat $NAME.yml | yq eval -ojson | \
     jq -r '.services|to_entries[]| [{services: .key, volumes: .value.volumes[]|select(.source|test("/appli"))}]?|.[].volumes.source')
 if [ -n "$KOMPOSE" ] && [ "$KOMPOSE" = "kompose" ]; then
-	echo -e "6> #################### génération des manifests ####################\n"
+	title "3.2" "Generation of manifests with Kompose"
 	if [ -n "$HELM" ] && [ "$HELM" = "helm" ]; then  
 		kompose -f $CLEANED convert -c
 		cd $NAME/templates
@@ -939,34 +1084,38 @@ if [ -n "$KOMPOSE" ] && [ "$KOMPOSE" = "kompose" ]; then
 		kompose -f $CLEANED convert
 	fi
 	patch_RWO
+	title "3.2.1" "Patching secret manifests"
 	patch_secret
 	patch_secretKeys
+	title "3.2.2" "Patching network manifests"
 	patch_networkPolicy $ENV
 	# create_pv_applis $ENV
+	title "3.2.3" "Patching storage manifests"
 	create_pv2 $ENV $NAME
 	# patch_pvc $ENV
+	title "3.2.4" "Patching file manifests"
 	patch_configmaps $CLEANED
-	patch_labels
-
-	echo ""
-	
-	echo -e "ETAPE 2: Création des object configMaps pour les volumes bind qui sont des fichiers et non des répertoires"
+	patch_labels	
+	# Création des object configMaps pour les volumes bind qui sont des fichiers et non des répertoires"
 	create_configmaps $ENV
 fi
 
-echo -e "6>#################### Patch multi-attached volumes ###################\n"
-
+title "3.3" "Patching multi-attached volumes"
 # find targeted volumes 
 export volumes=$(cat $CLEANED | yq eval -o json | jq -r '.services|to_entries[]|.value|select(has("volumes"))|.volumes[]|select((.type)=="volume").source'|uniq)
+
+if [ -z $volumes ]; then  
+	blue "No multi attached pvc found"; 
+fi
 
 # find if there is a nfs csi driver installed on the cluster
 export nfs_csi=$(oc get csidrivers.storage.k8s.io -o json | jq -r '.items[].metadata|select(.name|test("nfs")).name')
 export nfs_sc=$(oc get sc -o json | jq --arg nfs_csi $nfs_csi -r '.items[]|select(.provisioner|test("\($nfs_csi)")).metadata.name')
 
 create_sc() {
-    read -p "Enter NFS server name [methana.v102.abes.fr]...........: " server_name
+    read -p "$(italics "?? Enter NFS server name $(faint "[methana.v102.abes.fr]")...........: ")" server_name
     server_name=${server_name:-methana.v102.abes.fr}
-    read -p "Enter NFS share [/pool_SAS_2/OKD]............: " nfs_share
+    read -p "$(italics "?? Enter NFS share $(faint "[/pool_SAS_2/OKD]")............: ")" nfs_share
     nfs_share=${nfs_share:-/pool_SAS_2/OKD}
     cat <<EOF | oc apply -f -
 ---
@@ -989,7 +1138,7 @@ EOF
 for i in $volumes
     do number=$(cat $CLEANED | yq eval -o json | jq --arg i $i -r '.services|to_entries[]|.value|select(has("volumes"))|.volumes[]|=select((.type)=="volume")| {(.container_name): (.volumes[]|select(.type=="volume"))}|to_entries[]|select(.value.source==$i).key'|wc -l)
      if test $number -gt 1
-        then echo "There is multi attachments for \"$i\" volume"
+        then blue "There is multi attachments for \"$i\" volume"
              echo "A RWX csi driver is required for multi-attachments PVC"
             if [[ -n "$nfs_csi" ]]
                 then
@@ -999,7 +1148,7 @@ for i in $volumes
                             echo "There is an existing storage class $nfs_sc that points to"
                             oc get sc -o json | jq --arg nfs_csi $nfs_csi -r '.items[]|select(.provisioner|test("\($nfs_csi)"))|(.parameters.server + ":" + .parameters.share)'
                         else
-                            read -p "Do you want to create a nfs storage class using \"nfs.csi.k8s.io\" driver?.........:[y] " yn
+                            read -p "$(italics "?? Do you want to create a nfs storage class using \"nfs.csi.k8s.io\" driver?.........:$(faint "[y]") ")" yn
                             yn=${yn:-y}
                             case $yn in
                                 [Yy]* )
@@ -1012,13 +1161,13 @@ for i in $volumes
                     fi
                 else
                     while true; do
-                        read -p "Do you want to install the \"nfs.csi.k8s.io\" driver?(y/n)...............:[y] " yn
+                        read -p "$(italics "?? Do you want to install the \"nfs.csi.k8s.io\" driver?(y/n)...............:$(faint "[y]") ")" yn
                         yn=${yn:-y}
                         case $yn in
                             [Yy]* )
                                 echo "Downloading and installing nfs.csi.k8s.io driver to cluster"
                                 curl -skSL https://raw.githubusercontent.com/kubernetes-csi/csi-driver-nfs/v4.7.0/deploy/install-driver.sh | bash -s v4.7.0 --
-                            read -p "Do you want to create a nfs storage class using nfs.csi.k8s.io driver?.........:[y] " yn
+                            read -p "$(italics "?? Do you want to create a nfs storage class using nfs.csi.k8s.io driver?.........:$(faint "[y]") ")" yn
                             yn=${yn:-y}
                             case $yn in
                                 [Yy]* )
@@ -1036,7 +1185,7 @@ for i in $volumes
                     done
             fi
             while true; do
-                read -p "Do you want to use \"nfs-csi\" storage class for \"$i\" volume? (y/n)....................................:[y] " yn
+                read -p "$(italics "?? Do you want to use \"nfs-csi\" storage class for \"$i\" volume? (y/n)....................................:$(faint "[y]") ")" yn
                 yn=${yn:-y}
                 case $yn in
                     [Yy]* )
@@ -1053,22 +1202,20 @@ for i in $volumes
 	done
 
 
-# 7> Calcul des tailles des disques persistants
-
-echo -e "7>#################### Size calculation of persistent volumes ###################\n"
-
+#Calcul des tailles des disques persistants
 # size_calculation () {
 copy_to_okd () {
-compose=$(docker-compose config --format json)
+# compose=$(docker-compose config --format json)
 if [[ $1 = "bind" ]]
 	then
-		SOURCES=$(echo $compose | jq -r --arg type $1 --arg DIR "${PWD##*/}" '(.services[].volumes[]?|select(.type=="\($type)")|select(.source|test("home|root")))|={source: .source|split("\($DIR)")|.[1], type: .type, target: .target}|del (.services[].volumes[]?|select(.source|test("sock")))| del (.services[].volumes[]?|select(.source|test("/applis")))|.services|to_entries[]|{sources: (.key + ":." + (.value|select(has("volumes")).volumes[]|select(.type=="\($type)")|select(.source!=null)|select(.source|test("(\\.[^.]+)$")|not)|.source))}|.sources')
+		SOURCES=$(cat $NAME.yml | yq -ojson | jq -r --arg type $1 --arg DIR "${PWD##*/}" '(.services[].volumes[]?|select(.type=="\($type)")|select(.source|test("home|root")))|={source: .source|split("\($DIR)")|.[1], type: .type, target: .target}|del (.services[].volumes[]?|select(.source|test("sock")))| del (.services[].volumes[]?|select(.source|test("/applis")))|.services|to_entries[]|{sources: (.key + ":." + (.value|select(has("volumes")).volumes[]|select(.type=="\($type)")|select(.source!=null)|select(.source|test("(\\.[^.]+)$")|not)|.source))}|.sources')
 	else
-		SOURCES=$(echo $compose | jq -r --arg type $1 '(.services[].volumes[]?|select(.type=="\($type)")|select(.source|test("home|root")))|={source: .source, type: .type, target: .target}|del (.services[].volumes[]?|select(.source|test("sock")))| del (.services[].volumes[]?|select(.source|test("/applis")))|.services|to_entries[]|{sources: (.key + ":" + (.value|select(has("volumes")).volumes[]|select(.type=="\($type)")|select(.source!=null)|select(.source|test("(\\.[^.]+)$")|not)|.source))}|.sources')
+		SOURCES=$(cat $NAME.yml | yq -ojson | jq -r --arg type $1 '(.services[].volumes[]?|select(.type=="\($type)")|select(.source|test("home|root")))|={source: .source, type: .type, target: .target}|del (.services[].volumes[]?|select(.source|test("sock")))| del (.services[].volumes[]?|select(.source|test("/applis")))|.services|to_entries[]|{sources: (.key + ":" + (.value|select(has("volumes")).volumes[]|select(.type=="\($type)")|select(.source!=null)|select(.source|test("(\\.[^.]+)$")|not)|.source))}|.sources')
 fi
 if [ -n "$SOURCES" ]
 	then 
-		echo $SOURCES
+		echo -e "Here are available ${1}s:"
+		blue "$SOURCES\n"
 		# exit 1
 		index=0
 		declare -a tab1
@@ -1093,10 +1240,10 @@ if [ -n "$SOURCES" ]
 					src=$SRC
 				fi
 
-				echo "Calculating required size for disk claiming......................." 
+				echo "Calculating required size for disk claiming from $docker_host......................." 
 				tab1[$index]=$(ssh root@${docker_host} du -s $src | cut -f1) 
-				echo $SRC
-				echo $SVC:${tab1[$index]}
+				echo "$SRC"
+				echo "$SVC:$(blue ${tab1[$index]})"
 				if [[ ${tab1[$index]} -lt "100000" ]];
 					then
 						tab2[$index]="100Mi"
@@ -1104,18 +1251,21 @@ if [ -n "$SOURCES" ]
 						tab2[$index]=$(echo $(calc "int(${tab1[$index]} / (1024*1024) +1)+1")Gi)
 				fi
 
-				echo $SVC:${tab2[$index]}
+				echo "$SVC:$(blue ${tab2[$index]})"
 				tab3[$index]=$(cat $NAME.yml | yq eval -ojson| jq -r --arg size "${tab2[$index]}" --arg svc "$SVC" --arg src "$SRC" '.services |to_entries[] | select(.value.volumes | to_entries[] |.value.source | test("\($src)$"))?|select(.key=="\($svc)")|.value.volumes|=map(select(.source|test("\($src)$"))|with_entries(select(.key="source"))|.source="\($src)"|.size="\($size)")'|jq -s '.[0]|del(..|nulls)')
 				echo -e "\n"
 			done
 
 		length=$(echo "${tab3[*]}" | jq -s 'length')
+		# echo "LENGTH: $length"
 		for ((i=0; i<$length; i++ ))
 			do
 				tab4[$i]=$(echo "${tab3[*]}" | jq -s --arg i "$i" '.[$i|tonumber]')
 			done		
 
 		# echo "affichage du tableau"
+		# echo TAB: "${tab3[*]}"
+
 		for i in "${tab4[@]}"; do
 		if [ "$i" != "null" ]; then
 			templist+=( "$i" )
@@ -1124,12 +1274,40 @@ if [ -n "$SOURCES" ]
 
 		volumes=("${templist[@]}")
 		index=0
-		# echo "${volumes[*]}" >/tmp/toto2.json
+		# echo "${volumes[*]}" 
+		# exit
+		mount_points=$(echo $nfs_mount_points | jq -rs '.[]|.mount_point|split("/")|last')
+		# echo $mount_points
+
+		select_nfs_mount_point() {
+			# for i in $(echo "${volumes[@]}" |jq -r '.value.volumes[].source|split("/")|last')
+			# for n in $(echo "$i" |jq -r '.value.volumes[].source|split("/")|last')
+				# do 
+				toto=$(echo "$i" |jq -r '.value.volumes[].source|split("/")|last')
+					for j in $mount_points
+						do 
+							# echo DEBUG1 $toto:$j
+							echo "$toto" | grep "$j" > /dev/null
+							if [ "$?" == "0" ]
+								then 
+									mount_point=$(echo $nfs_mount_points |jq -rs --arg j "$j" '.[]|select(.mount_point|test("\($j)")).mount_point|split("/")|last')
+									# echo toto: $mount_point
+								# else
+								# 	mount_point=empty
+							fi
+						done
+				# done
+		}
+
+		# select_nfs_mount_point
+		# echo $mount_point
 		# exit
 
 		# Change size of volumeclaim yaml declaration
 		for i in "${volumes[@]}"; 
 			do 
+				select_nfs_mount_point
+				# echo DEBUG2 $mount_point
 				# echo "yes:" $i
 				size=$(echo $i | jq -r '.value.volumes[]?.size'|uniq)
 				# echo $size
@@ -1137,60 +1315,64 @@ if [ -n "$SOURCES" ]
 				# echo $source
 				service=$(echo $i | jq -r '.key'|uniq)
 				# echo $service
-				# index=$(echo $i | jq -r --arg size "$size" '.value.volumes[]?.size|index("\($size)")'|uniq)
-				for j in $(echo $i | jq -r --arg service "$service" 'select(.key=="\($service)").value.volumes[].target')
-					do 
-						index=$(echo "${volumes[*]}" |jq -s --arg j "$j" --arg service "$service" '[group_by(.key)[]|.[]|select(.key=="\($service)").value.volumes[0]]|[.[].target]|index("\($j)")')
-						# echo index: $index
-						if [[ $1 = "bind" ]]
-							then
-								file="${service}-claim${index}-persistentvolumeclaim.yaml"
-								echo $file
-								file_name="${service}-claim${index}"
-								echo $file_name
-							else
-								file="${source}-persistentvolumeclaim.yaml"
-								file_name="${source}"
-						fi
-						# echo "DEBUG1"
+				# for k in $mount_point
+				# 	do
+				# 		echo DEBUG3: $k: "${source##*/}"
+						if [ "$mount_point" != "${source##*/}" ] ; then
+							for j in $(echo $i | jq -r --arg service "$service" 'select(.key=="\($service)").value.volumes[].target')
+								do 
+									index=$(echo "${volumes[*]}" |jq -s --arg j "$j" --arg service "$service" '[group_by(.key)[]|.[]|select(.key=="\($service)").value.volumes[0]]|[.[].target]|index("\($j)")')
+									# echo index: $index
+									if [[ $1 = "bind" ]]
+										then
+											file="${service}-claim${index}-persistentvolumeclaim.yaml"
+											# echo $file
+											file_name="${service}-claim${index}"
+											# echo $file_name
+										else
+											file="${source}-persistentvolumeclaim.yaml"
+											file_name="${source}"
+									fi
 
-						status=""
-						# echo $file_name
-						search_pvc=$(oc get pvc -o json | jq --arg file_name $file_name '.items[]|.metadata|select(.name=="\($file_name)")')
-						if [ -n "$search_pvc" ]
-							then
-								while [ "$status" != "Bound" ] && [ -n "$file_name" ]
-									do
-										# echo "DEBUG2"
-										status=$(oc get pvc $file_name -o json | jq -r '.status.phase')
-									done
+									status=""
+									# echo $file_name
+									search_pvc=$(oc get pvc -o json | jq --arg file_name $file_name '.items[]|.metadata|select(.name=="\($file_name)")')
+									if [ -n "$search_pvc" ]
+										then
+											while [ "$status" != "Bound" ] && [ -n "$file_name" ]
+												do
+													status=$(oc get pvc $file_name -o json | jq -r '.status.phase')
+												done
 
-								is_nfs=$(oc get pvc $file_name -o json | jq -r '.spec.storageClassName|test("nfs")')
-								if [[ $is_nfs != "true" ]]
-									then
-										echo "Resizing $file_name to $size ................"
-										# exit
-										cat ${file} | 
-											yq eval -ojson| 
-											jq --arg size "$size" '.spec.resources.requests.storage=$size'| 
-											yq eval -P |
-										sponge ${file}
-										oc apply -f ${file}
-								fi
+											is_nfs=$(oc get pvc $file_name -o json | jq -r '.spec.storageClassName|test("nfs")')
+											if [[ $is_nfs != "true" ]]
+												then
+													echo "Resizing $file_name to $size ................"
+													# exit
+													cat ${file} | 
+														yq eval -ojson| 
+														jq --arg size "$size" '.spec.resources.requests.storage=$size'| 
+														yq eval -P |
+													sponge ${file}
+													oc apply -f ${file}
+											fi
+									fi
+								done
 						fi
-					done
+					# done
 			done
 		# }
+		# exit
 
-		read -p "Would you like to copy current data to okd volume of type $1 (may be long)? (y/n).......................................[y]" answer
+		read -p "$(italics "?? Would you like to copy current data to okd volume of type $1 (may be long)? (y/n).......................................$(faint "[y]")")" answer
 		answer=${answer:-y}
+		# echo "answer: $answer"
 		if [[ "$answer" = "y" ]];
 			then
 				# size_calculation $1
-				# echo "DEBUG1"
 				for i in "${volumes[@]}"; 
 					do 
-						# echo "DEBUG2"
+						select_nfs_mount_point
 						service=$(echo $i | jq -r '.key')
 						# echo $service
 						target=$(echo $i | jq -r '.value.volumes|last.target')
@@ -1198,37 +1380,43 @@ if [ -n "$SOURCES" ]
 						source=$(echo $i | jq -r '.value.volumes|last.source')
 						# echo $source
 						private_key=$(cat ~/.ssh/id_rsa)
-						echo "DEBUG copy_to_okd"
-						if [[ "$(echo $source| grep backup)" != '' ]];
-							then
-								src=$source
-							else
-								if [[ $1 = "bind" ]]
-									then
-										src="/opt/pod/${NAME}-docker/${source}"
-									else
-										src="/var/lib/docker/volumes/${NAME}-docker_${source}/_data/"
+						# for k in $mount_point
+						# 	do
+								# echo $k: "${source##*/}"
+								if [ "$mount_point" != "${source##*/}" ]; then
+									if [[ "$(echo $source| grep backup)" != '' ]];
+										then
+											src=$source
+										else
+											if [[ $1 = "bind" ]]
+												then
+													src="/opt/pod/${NAME}-docker/${source}"
+												else
+													src="/var/lib/docker/volumes/${NAME}-docker_${source}/_data/"
+											fi
+									fi
+									size=$(echo $i | jq -r '.value.volumes[].size')
+									echo "###########################################################################"
+									echo -e "$service:\nPaste those commands to copy data:"
+									echo -e "${YELLOW}from${ENDCOLOR} ${docker_host}:${src}/ ${YELLOW}to${ENDCOLOR} persistent volume ($size):\n"
+									blue "mkdir /root/.ssh && echo \"$private_key\" > /root/.ssh/id_rsa && chmod 600 -R /root/.ssh; \
+if [ \"\$(cat /etc/os-release|grep "alpine")\" = '' ]; \
+then apt update && apt install rsync openssh-client -y;  \
+else apk update && apk -f add rsync openssh-client-default openssh-client; fi; \
+rsync -av -e 'ssh -o StrictHostKeyChecking=no' ${docker_host}:${src}/ ${target}/; \
+exit"
+									echo "###########################################################################"
+									POD=$(oc get pods -o json| jq -r --arg service "$service" '.items[]|.metadata|select(.name|test("\($service)-[b-df24-9]+-[b-df-hj-np-tv-z24-9]{5}"))|.name')
+									# sleep 10
+									oc debug $POD --as-root=true
+									# echo "oc rsync --progress=true ./volume_${service} $POD-debug:${target} --strategy=tar"
+									# oc rsync --progress=true ./volume_${service} $POD-debug:${target}
 								fi
-						fi
-						size=$(echo $i | jq -r '.value.volumes[].size')
-						echo "###########################################################################"
-						echo -e "$service:\n Type those commands to copy data to persistent volume ($size):....................................... \n"
-						echo "mkdir /root/.ssh && echo \"$private_key\" > /root/.ssh/id_rsa && chmod 600 -R /root/.ssh; \
-		if [ \"\$(cat /etc/os-release|grep "alpine")\" = '' ]; \
-		then apt update && apt install rsync openssh-client -y;  \
-		else apk update && apk -f add rsync openssh-client-default openssh-client; fi; \
-		rsync -av -e 'ssh -o StrictHostKeyChecking=no' ${docker_host}:${src}/ ${target}/; \
-		exit"
-						echo "###########################################################################"
-						POD=$(oc get pods -o json| jq -r --arg service "$service" '.items[]|.metadata|select(.name|test("\($service)-[b-df24-9]+-[b-df-hj-np-tv-z24-9]{5}"))|.name')
-						# sleep 10
-						oc debug $POD --as-root=true
-						# echo "oc rsync --progress=true ./volume_${service} $POD-debug:${target} --strategy=tar"
-						# oc rsync --progress=true ./volume_${service} $POD-debug:${target}
+							# done
 					done
 		fi
 	else
-		echo "No volume of type \"$1\"...... going on"
+		blue "No volume of type \"$1\"...... going on"
 fi
 }
 
@@ -1240,9 +1428,7 @@ release_pv() {
 		done
 }
 
-# 8> Déploiement de l'application
-
-echo -e "8> ######################## Application Deployment #################################\n"
+step "4" " Application deployment"
 choice=$(
 case $ENV in
 	local) echo -e "oc apply -f \"*.yaml\"\n";;
@@ -1250,7 +1436,7 @@ case $ENV in
 esac
 )
 
-read -p "Would you like to deploy $NAME on OKD $ENV?.......................................[y] " answer
+read -p "$(italics "?? Would you like to deploy $NAME on OKD $ENV?.......................................$(faint "[y]") ")" answer
 answer=${answer:-y}
 echo -e "(You can alternatively do it later by manually entering: $choice)"
 
@@ -1265,11 +1451,12 @@ if [[ "$answer" == "y" ]];
 			else
 				release_pv $NAME
 				while true; do
-					read -p "Would you like to create a new project?(y/n)...................................." yn
+					read -p "$(italics "?? Would you like to create a new project?(y/n)....................................: $(faint "[y]")")" yn
+					yn=${yn:-y}
 					case $yn in
 						[Yy]* )                         
-							echo "Enter the name of the project...................................."
-							read project
+							read -p "$(italics "?? Enter the name of the project $(faint "[$namespace]")....................................")" project
+							project=${project:-$namespace}
 							oc new-project $project
 							echo -e "Setting SCC anyuid to default SA.......................................\n"
 							oc adm policy add-scc-to-user anyuid -z default
@@ -1279,31 +1466,28 @@ if [[ "$answer" == "y" ]];
 							echo -e "\n"
 							break;;
 						[Nn]* )
-							echo "Ready to deploy $name. Press \"Enter\" to begin......................................."
-							read answer
-							oc apply -f "*.yaml*"
-							echo -e "\n"
-							oc get pods
-							echo -e "\n"
-							copy_to_okd bind
-							copy_to_okd volume
-							echo -e "\n";;
+							break;;
 						* ) echo "Please answer yes or no.";;
 					esac
 				done
 
-				echo "Ready to deploy $name. Press \"Enter\" to begin......................................."
-				read answer
+				read -p "$(italics "?? Ready to deploy $name. Press \"Enter\" to begin.......................................")" answer
 				oc apply -f "*.yaml*"
 				echo -e "\n"
 				oc get pods
 				echo -e "\n"
+				step "5" "Copy of persistent volumes"
+				title "5.1" "Copy data to pvc of type bind"
 				copy_to_okd bind
+				title "5.2" "Copy data to pvc of type volume"
 				copy_to_okd volume
 				echo -e "\n"
 		fi
 	else
+		step "5" "Copy of persistent volumes"
+		title "5.1" "Copy data to pvc of type bind"
 		copy_to_okd bind
+		title "5.2" "Copy data to pvc of type volume"
 		copy_to_okd volume
 		# exit 1
 fi
@@ -1311,14 +1495,22 @@ fi
 
 # 9> Redémarrage des pods et URL de connexion
 
-echo -e "9>############################ Pods reload #######################\n"
-if [[ $answer != "y" ]]; then exit; fi
-echo "Restart all $NAME pods......................................." 
-oc rollout restart deploy
-timeout 10 oc get pods -w
+step "FINAL" "Pods reload and connexion URL"
+# if [[ $answer != "y" ]]; then exit; fi
+read -p "$(italics "?? Reloading pods to launch \"$NAME\" $(faint "[y]") : ?")" yn
+yn=${yn:-y}
+case $yn in
+	[Yy]* )    
+		echo "Restart all $NAME pods......................................." 
+		oc rollout restart deploy
+		timeout 10 oc get pods -w;;
+	[Nn]* )
+		echo "You should manually relaod pods before \"$NAME\" being up by typing \"oc rollout restart deploy\"";;
+esac
+
 echo -e "\n Here is the list of configured services: \n"
 oc get svc
-read -p "Enter a list of above services you want to expose: " services
+read -p "$(italics "?? Enter a list of above services you want to expose: ")" services
 for i in $services
 	do
 		oc expose svc $i
@@ -1327,9 +1519,9 @@ for i in $services
 # oc expose svc $NAME-front
 # URL=$(oc get route -o json | jq --arg NAME "$NAME" -r '.items[]|.spec|select(.host|test("\($NAME)-front"))|.host')
 URL=$(oc get route -o json | jq  -r '[.items[]|.spec]|first|.host')
-echo -e "\n Congratulations"
+title "" "Congratulations!"
 echo -e "You can reach $NAME application at: "
-echo "http://$URL"
+blue "http://$URL\n"
 
 
 
