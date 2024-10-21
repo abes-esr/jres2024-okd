@@ -1,5 +1,5 @@
 #!/bin/bash
-# 23/10/28 NBT
+# 24/10/21 NBT
 # Script de conversion d'un fichier docker-compose.yaml en manifests k8s
 # Génère 3 types de manifest: deploy, services, configMap
 # Nécessite les paquets jq, yq, moreutils, docker-compose, kompose
@@ -12,7 +12,6 @@ help () {
 	echo -e "appli_name: \t\tnom de l'application à convertir"
 	echo -e "default or '' : \tGenerates cleaned appli.yml compose file to plain k8s manifests "
 	echo -e "env_file: \t\tGenerates cleaned advanced appli.yml with migrating plain 'environment' \n\t\t\tto 'env_file' statement, will generate k8s \"configmaps\" for common vars and \"secrets\" for vars containing 'PASSWORD' or 'KEY' as keyword"
-	# echo -e "secret: \t\tThe same as env_file, in addition generates advanced appli.yml with \n\t\t\tmigrating all vars containing 'PASSWORD' or 'KEY' as keyword to secret,\n\t\t\twill be converted into k8s secrets"
 	echo -e "kompose: \t\tConverts appli.yml into plain k8s manifests ready to be deployed with \n\t\t\t'kubectl apply -f *.yaml"
 	echo -e "helm: \t\t\tKompose option that generates k8s manifest into helm skeleton for appli.yml\n"
 	echo -e "example: ./compose2manifests.sh local item env_file kompose\n"
@@ -203,7 +202,7 @@ esac
 
 if [[ $(echo $namespace | grep $NAME > /dev/null && echo $?) != 0 ]];
 	then
-		echo -e "Warning: current OKD namespace $(blue \"$namespace\") may not correspond to the appli $(blue \"$NAME\") you are about to deploy.\n"
+		echo -e "${YELLOW}!! Warning !! ${ENDCOLOR}: current OKD namespace $(blue \"$namespace\") may not correspond to the appli $(blue \"$NAME\") you are about to deploy.\n"
 		read -p "$(italics "?? Enter the name of a new namespace relative to $(blue \"$NAME\")"): " namespace
 		blue "$namespace"
 fi
@@ -234,19 +233,6 @@ set_ssh_key() {
 			fi
 }
 
-install_ssh_key() {
-	# read -p "$(italics "?? Do you want to copy them on host docker? [y]")" yn2	
-	# yn2=${yn2:-y}
-	# case $yn2 in
-	# [Yy]* )
-		italics "Installing pub keys......."
-		ssh-copy-id root@${i}.${domain}
-# 	[Nn]* )
-# 		italics "You must first install some pub key before using this script"
-# 		exit;;
-# esac
-}
-
 testing_ssh() {
 
 echo "Checking ssh connectivity to Docker hosts to bind ...."
@@ -258,7 +244,6 @@ for i in $docker_hosts
 				echo "Connexion to root@${i}.${domain} ........... $(blue OK)"
 			else 
 				echo "Connexion to root@${i}.${domain} ........... $(red NOK)"
-				# echo "Please upload your public ssh key to root@${i}.${domain}"
 				read -p "$(italics "?? Do you want to install $key to root@${i}.${domain}: $(faint "[y]")?") " yn
 				yn=${yn:-y}
 				while true; do
@@ -292,7 +277,7 @@ echo ""
 
 
 ask_testing_ssh() {
-echo "!!! Warning !!!"
+echo "${YELLOW}!!! Warning !!!${ENDCOLOR}"
 read -p "$(italics "?? Do you want to check ssh connectivity? If a host is not reacheable, pub key will be installed.[no]: ")" yn
 yn=${yn:-n}
 while true; do
@@ -346,7 +331,6 @@ get_running_docker() {
 				NAME_SHORT=$(echo $NAME | cut -d"-" -f1)
 
 				diplo=$( \
-						# for i in {1..6}; \
 						for i in $docker_hosts
 							do 
 								ssh root@${i}.${domain} docker ps --format json | jq --arg i "${i}" '{"docker_host": ($i), nom: .Names}'; \
@@ -364,16 +348,6 @@ get_running_docker() {
 }
 
 if [[ "$ENV" == "prod" ]] || [[ "$ENV" == "test" ]] || [[ "$ENV" == "dev" ]]; then
-
-		# echo "##### Avertissement! #######################"
-		# echo "Il faut que clé ssh valide sur tous les comptes root des Docker hosts{} de ${1} pour continuer......................................."
-		# read -p "Continuer? (y/n)...........[y]" continue
-		# continue=${continue:-y}
-		# if [[ "$continue" != "y" ]]; then 
-		# 	echo "Please re-execute the script after having installed your ssh pub keys on Docker hosts de ${1}"
-		# 	exit 1;
-		# fi
-
 		echo -e ""
 
 		echo "Ok, let's go on!"
@@ -516,7 +490,6 @@ docker-compose config --format json | yq -o json \
 											| yq -P \
 											| sed 's/\.svc//g'> $NAME.yml
 message
-# 2> Conversion initiale du docker-compose.yml # | jq 'del (.services[].mem_limit)'\
 
 title "2.2" "Cleaning of $NAME.yml"
 
@@ -534,12 +507,8 @@ cat $NAME.yml \
 									| .services|=with_entries(.value|=(select(has("volumes")).volumes |= sort_by((.type)) ))' \
 			| yq -P | sponge $NAME.yml
 
-# echo -e "NAME: \n$(cat $NAME.yml)"
-# exit
-
 message
 
-#### NBT 231108
 #### insertion de la clé "secrets" dans chacun des services de docker-compose.yml
 #### prend en paramètre le nom du fichier docker-compose.yml
 
@@ -548,14 +517,7 @@ CLEANED="$NAME.yml"
 if [ -n "$VARS_TYPE" ] && [ "$VARS_TYPE" == 'env_file' ]
 	then
 		echo -e "on continue......................................."
-	# if [ "$3" == 'secret' ] || [ "$3" == 'env_file' ]; then
-
-	# 	if [ "$3" = "secret" ]; then
-
-			######  transformation du docker-compose.yml en liste réduite ######
-			# SMALL_LIST=$(cat $CLEANED | yq eval - -o json | jq '[.services[]|  {(.container_name): .environment}]') 
 			SMALL_LIST=$(cat $CLEANED | yq eval - -o json | jq '.services|to_entries[] | {(.key): .value.environment}'| jq -s)
-			#echo $SMALL_LIST| yq eval -P
 			message
 
 			###### select variable name filtering by KEY or PASSWORD ####
@@ -563,27 +525,9 @@ if [ -n "$VARS_TYPE" ] && [ "$VARS_TYPE" == 'env_file' ]
 							| jq '.[]|to_entries[]|try {key:.key,value:.value|to_entries[]} | select(.value.key | test("KEY|PASS|SECRET"))' \
 							| jq -s )
 			message
-
-			# ###### obtention d une paire KEY:services #######
-			# PAIR_LIST=$(for i in $(echo $FILTER_LIST | jq -r '.[].value.key' ); \
-			# 		do tata=$(echo $FILTER_LIST | jq -r --arg toto "$i" '.[] |select(.value.key==$toto)|.key'); \
-			# 			for j in $tata; do echo "$i:$j"; \
-			# 					done; \
-			# 		done | sort -u )
-			# message
-
-			# ###### Injection dans le json #####
-			# for i in $(echo $PAIR_LIST); \
-			# 	do export KEY=$(echo $i| cut -d':' -f1); \
-			# 	export service=$(echo $i| cut -d':' -f2-); \
-			# 	cat $CLEANED | yq eval - -o json| jq --arg toto "$service" --arg tata "$KEY" '.services[$toto].secrets |= . + [$tata|ascii_downcase|gsub("_";"-")]' \
-			# 		| yq eval - -P | sponge $CLEANED; \
-			# 	done
-			# message
 		
 			###### Generating secret files from .env file  #####
-			export var=$(echo $FILTER_LIST | jq  -r '.[].value.key') \
-			# export data=$(echo $FILTER_LIST | jq  -r '.[].value.value') \
+			export var=$(echo $FILTER_LIST | jq  -r '.[].value.key')
 			for i in $(echo $var); \
 				do 
 					export data=$(echo $FILTER_LIST | jq --arg tata "$i" -r '[.[].value | select(.key==$tata).value]|first')
@@ -595,11 +539,10 @@ if [ -n "$VARS_TYPE" ] && [ "$VARS_TYPE" == 'env_file' ]
 					| sponge $CLEANED; \
 				done
 			message
-	# 	fi
 
 		########### Conversion du environment en env_file ############
 
-		# 3> Génération des {service}.env à partir du docker-compose.yml
+		# Génération des {service}.env à partir du docker-compose.yml
 		title "2.3" "Generation of \${services}.env"
 		for i in $(cat $CLEANED|yq eval -ojson|jq -r --arg var "$i" '.services|to_entries|map(select(.value.environment != null)|.key)|flatten[]'); \
 			do 	cat $CLEANED | \
@@ -611,7 +554,7 @@ if [ -n "$VARS_TYPE" ] && [ "$VARS_TYPE" == 'env_file' ]
 			done
 		message
 
-		# 4> Déclaration des variables contenant un secret dans le env_file
+		# Déclaration des variables contenant un secret dans le env_file
 		for i in $(ls *.env); 
 			do 
 				for j in $(cat $i | egrep '(KEY|PASS|SECRET)'); 
@@ -622,7 +565,7 @@ if [ -n "$VARS_TYPE" ] && [ "$VARS_TYPE" == 'env_file' ]
 					done; 
 			done 
 
-		# 4> Déclaration des {services.env} dans docker-compose.yml
+		# Déclaration des {services.env} dans docker-compose.yml
 		title "3.4" "Declaration of \${services}.env into deployments"
 		for i in $(cat $CLEANED|yq eval -ojson|jq -r --arg var "$i" '.services|to_entries|map(select(.value.environment != null)|.key)|flatten[]'); \
 			do echo $i; cat $CLEANED | \
@@ -632,7 +575,7 @@ if [ -n "$VARS_TYPE" ] && [ "$VARS_TYPE" == 'env_file' ]
 			done
 		message
 
-	# 5> Suppression des environnements et nettoyage final
+	# Suppression des environnements et nettoyage final
 	title "3.5" "Cleaning"
 	cat $CLEANED \
 	| jq 'del (.services[].environment)' \
@@ -646,7 +589,7 @@ message
 
 	else
 
-# 5> Suppression des environnements et nettoyage final
+# Suppression des environnements et nettoyage final
 echo -e "5> #################### Suppression des environnements et nettoyage final ####################\n"
 cat $CLEANED \
 | yq eval -o json \
@@ -668,45 +611,35 @@ for i in $(grep ReadOnlyMany *persistent* |cut -d: -f1);
 }
 
 patch_expose_auto () {
-    # services=$(docker-compose -f $CLEANED config | yq -o json| jq -r '.services|to_entries[]|.value|select((has("ports") or has("expose"))|not)?|."container_name"')
-    # if [[ -n $services ]]
-    #     then
-			for service in $services; 
-				do 
-					port=$(ssh root@$docker_host docker inspect $service | jq -cr '[.[].NetworkSettings.Ports|to_entries[]|.key|split("/")|.[0]'])
-                    port=${port:-[]}
-                    if [[ $port != '[]' ]]
-                        then
-                            blue "Patching ports $port for service $service ............"
-                            cat $CLEANED | yq -o json| jq | jq --arg service "$service" --argjson port "$port" '.services."\($service)".expose+=$port' \
-                            |sponge $CLEANED
-                    fi
-				done
-			cat $CLEANED | yq -P | sponge $CLEANED
-	# fi
+	for service in $services; 
+		do 
+			port=$(ssh root@$docker_host docker inspect $service | jq -cr '[.[].NetworkSettings.Ports|to_entries[]|.key|split("/")|.[0]'])
+			port=${port:-[]}
+			if [[ $port != '[]' ]]
+				then
+					blue "Patching ports $port for service $service ............"
+					cat $CLEANED | yq -o json| jq | jq --arg service "$service" --argjson port "$port" '.services."\($service)".expose+=$port' \
+					|sponge $CLEANED
+			fi
+		done
+	cat $CLEANED | yq -P | sponge $CLEANED
 }
 
 patch_expose () {
-    # services=$(docker-compose -f $CLEANED config | yq -o json| jq -r '.services|to_entries[]|.value|select((has("ports") or has("expose"))|not)?|."container_name"')
-    # if [[ -n $services ]]
-    #     then
-    #         echo -e "The following services don't have any explicit defined ports: \n$services"
-            echo "You may define them one by one so as the conversion to be successfull"
-            for service in $services; 
-                do 
-                    read -p "$(italics "?? $service: Enter port number to expose the service $(faint "(press to leave empty)"): ")" port
-                    # port=${port:-[]}
-                    if [[ -n $service ]]
-                        then
-                            if [[ -n $port ]]
-                                then
-                                    cat $CLEANED | yq -o json | jq --arg service "$service" --arg port "$port" '.services."\($service)".expose+=[ "\($port)" ]' \
-                                    |sponge $CLEANED
-                            fi
-                    fi
-                done
-            cat $CLEANED | yq -P | sponge $CLEANED
-	# fi
+	echo "You may define them one by one so as the conversion to be successfull"
+	for service in $services; 
+		do 
+			read -p "$(italics "?? $service: Enter port number to expose the service $(faint "(press to leave empty)"): ")" port
+			if [[ -n $service ]]
+				then
+					if [[ -n $port ]]
+						then
+							cat $CLEANED | yq -o json | jq --arg service "$service" --arg port "$port" '.services."\($service)".expose+=[ "\($port)" ]' \
+							|sponge $CLEANED
+					fi
+			fi
+		done
+	cat $CLEANED | yq -P | sponge $CLEANED
 }
 
 # Patch *.txt file to remove '\n' character based in 64
@@ -749,12 +682,6 @@ patch_secretKeys () {
 # Patch networkpolicy to allow ingress
 	patch_networkPolicy () {
 	echo "patching ingress in $NAME-docker-$ENV-default-networkpolicy.yaml......................................."
-	# if [[ $ENV != "local" ]]
-	# 	then 
-	# 		NETWORK=$NAME-docker-$ENV-default-networkpolicy.yaml
-	# 	else
-	# 		NETWORK=okd-default-networkpolicy.yaml
-	# fi
 	NETWORK=$(ls | grep networkpolicy)
 	cat $NETWORK | 
 		yq eval -ojson | 
@@ -762,54 +689,6 @@ patch_secretKeys () {
 				map(.from |= .+ [{"namespaceSelector":{"matchLabels":{ "policy-group.network.openshift.io/ingress": ""}}}])'|
 		yq eval -P | sponge $NETWORK
 }
-
-# Patch pvc pour /appli
-patch_pvc () {
-	index="-1"
-	for i in $applis_svc; 
-		do 
-			index=$(cat $NAME.yml | yq eval -ojson | jq -r  --arg applis_svc "$i" '.services|to_entries[]| [{services: .key, volumes: .value.volumes[]|select(.source|test("/appli"))}]?|to_entries[]|select(.value.services=="\($applis_svc)").key')
-			for j in $(echo $index);
-				do
-					echo "patching /applis in $i-claim$j-persistentvolumeclaim.yaml ......................................."
-					cat $i-claim$j-persistentvolumeclaim.yaml | 
-						yq eval -ojson | 
-							jq --arg name "$i" --arg env "$1" --arg index "$j" '.spec.resources.requests.storage="8Ti"|.spec.volumeName="applis-\($name)-\($env)-\($index)"|.spec.storageClassName=""|.spec.accessModes=["ReadWriteMany"]' |
-						yq eval -P | sponge $i-claim$j-persistentvolumeclaim.yaml
-				done
-		done
-}
-
-create_pv_applis () {
-	if [[ $applis_svc != '' ]];
-		then
-			for i in $applis_svc;
-				do 
-					index="-1"
-					applis_source=$(cat $NAME.yml | yq eval -ojson | \
-													jq -r --arg applis_svc "$i" '.services|to_entries[]|select(.key=="\($applis_svc)")|.value.volumes[].source|split("/applis/")|.[1]'|uniq)
-					for j in $applis_source; 
-						do
-							index=$((index +1))
-							echo "creating $i-pv$index-persistentvolume.yaml ......................................."
-echo "apiVersion: v1
-kind: PersistentVolume
-metadata:
-  name: applis-$i-$1-$index
-spec:
-  capacity:
-    storage: 8Ti 
-  accessModes:
-  - ReadWriteMany
-  nfs: 
-    path: /mnt/EREBUS/zpool_data/$j
-    server: erebus.v102.abes.fr 
-  persistentVolumeReclaimPolicy: Retain" > $i-pv$index-persistentvolume.yaml
-						done
-				done
-	fi
-}
-
 
 create_pv2() {
 nfs_mount_points=$(ssh root@$docker_host mount | \
@@ -832,22 +711,12 @@ for i in $(echo $nfs_mount_points|jq -r '."mount_point"|split("/")|last')
 			then 
 				nfs_services=$nfs_service
 		fi
-		# echo $nfs_services|jq
-		# echo $i
     done
 
-# echo $nfs_services|jq
-# index="-1"
-
 for i in $(echo $nfs_services|jq -r '.key'); do \
-# index=$((index +1))
-# echo "index: $index"
-# echo $i
-
 vol_nb=$(cat $NAME.yml|yq -ojson |jq --arg i "$i" --arg pwd "${PWD##*/}" -r '.services|to_entries[]
 		|select(.key=="\($i)")
 		|.value.volumes|length')
-# echo vol_nb: $vol_nb
 
 for ((index=0; index<$vol_nb; index++ )); do \
 source=$(echo $nfs_services \
@@ -915,46 +784,15 @@ create_pvc_nfs() {
 	rm -f $i-claim$index-persistentvolumeclaim.yaml
 }
 
-create_pvc_nfs_old() {
-
-	echo "patching $source_renamed in $i-claim$index-nfs-persistentvolumeclaim.yaml ......................................."
-	cat $i-claim$index-persistentvolumeclaim.yaml | 
-		yq eval -ojson | 
-			jq --arg project "$project" --arg name "$i" --arg env "$ENV" --arg index "$index" \
-			'.metadata.name|="\($name)-claim\($index)-\($env)"
-			|.metadata.labels."io.kompose.service"|="\($name)-claim\($index)-nfs-\($env)"
-			|.spec.resources.requests.storage="8Ti"
-			|.spec.volumeName="\($name)-pv\($index)-nfs-\($env)"
-			|.spec.storageClassName=""|.spec.accessModes=["ReadWriteMany"]' |
-		yq eval -P | sponge $i-claim$index-nfs-persistentvolumeclaim.yaml
-	echo "deleting $i-claim$index-persistentvolumeclaim.yaml"
-	rm -f $i-claim$index-persistentvolumeclaim.yaml
-}
-
 patch_deploy_nfs() {
 
 	oldname=$i-claim${index}
-	# echo $oldname
 	newname="$i-claim${index}-nfs-${namespace}-$ENV"
-	# echo $newname     
 	cat $i-deployment.yaml | yq -ojson | \
 							jq --arg newname "$newname" --arg oldname "$oldname" --arg subpath "$subpath" \
 							'(.spec.template.spec.containers[0].volumeMounts[]|select(.name=="\($oldname)"))+= ({subPath:"\($subpath)"}|.name|="\($newname)")|
 							 (.spec.template.spec.volumes[]|select(.name=="\($oldname)"))|=(.name|="\($newname)"|.persistentVolumeClaim.claimName|="\($newname)")' | yq -P | sponge $i-deployment.yaml
 }
-
-patch_deploy_nfs_old() {
-
-	oldname=$i-claim${index}
-	# echo $oldname
-	newname="$i-claim${index}-nfs-$ENV"
-	# echo $newname     
-	cat $i-deployment.yaml | yq -ojson | \
-							jq --arg newname "$newname" --arg oldname "$oldname" --arg subpath "$subpath" \
-							'(.spec.template.spec.containers[0].volumeMounts[]|select(.name=="\($oldname)"))+= ({subPath:"\($subpath)"}|.name|="\($newname)")|
-							 (.spec.template.spec.volumes[]|select(.name=="\($oldname)"))|=(.name|="\($newname)"|.persistentVolumeClaim.claimName|="\($newname)")' | yq -P | sponge $i-deployment.yaml
-}
-
 
 patch_configmaps() {
 
@@ -962,7 +800,6 @@ patch_configmaps() {
 	 	do 
 			echo "patching configMaps in $i ......................................."
 			claims=$(cat $i | yq -ojson| jq -r '.spec.template.spec.containers[].volumeMounts[]?|select((.mountPath|test("(\\.[^.]+)$")) and (.name|test("claim"))).name')
-			# echo $claims
 
 			for j in $claims
 				do 
@@ -972,10 +809,8 @@ patch_configmaps() {
 					jq -r --arg j $j 'del(.spec.template.spec.volumes[]?|(select(.name=="\($j)")))'| \
 					sponge $i
 				done
-			# cat $i
 
 			services=$(cat $i | yq -ojson| jq -r '.spec.template.spec.containers[].volumeMounts[]?|select((.mountPath|test("(\\.[^.]+)$")) and (.name|test("claim")))|(.name|split("-claim")|.[0]) + "-" + (.mountPath|split("/")|last|gsub("_";"-")|gsub("\\.";"-")|ascii_downcase)')
-			# echo $services
 
 			for j in $services
 				do cat $i | yq -ojson| \
@@ -984,21 +819,6 @@ patch_configmaps() {
 				done 
 		done
 }
-
-# patch_configmaps_new () {
-# 	for i in $(cat movies.yml | yq -ojson| jq -r '.services|keys[]')
-# 		do 
-# 			sources=$( cat movies.yml | yq -ojson| jq -r  --arg i $i '.services|to_entries[]|select(.key=="\($i)").value.volumes[]?|.source|split("/")|last' )
-# 			# echo $sources
-# 			for j in $sources
-# 				do
-# 					echo -e "patching ${i}-deployment.yaml with source $j......."
-# 					cat ${i}-deployment.yaml | yq -ojson | \
-# 					jq -r --arg i $i --arg j $j '((.spec.template.spec.containers[].volumeMounts[]?|select((.mountPath|test("(\\.[^.]+)$")) and (.name|test("claim")) )) |= {mountPath: .mountPath, name: ("\($i)-" + $j|gsub("_";"-")|gsub("\\.";"-")|ascii_downcase), subPath: $j })|.spec.template.spec.volumes+=[{configMap: {defaultMode: 420, name: ("\($i)-" + $j|gsub("_";"-")|gsub("\\.";"-")|ascii_downcase)}, name: ("\($i)-" + $j|gsub("_";"-")|gsub("\\.";"-")|ascii_downcase)}]' | yq -P | \
-# 					sponge ${i}-deployment.yaml 
-# 				done
-# 		done
-# }
 
 create_configmaps() {
 	CM=$(cat $NAME.yml | yq -o json | jq -r --arg pwd "$NAME-docker-$ENV" '.services[].volumes|select(.!=null)|.[]|select(.type == "bind")|select(.source|test("(\\.[^.]+)$"))|select(.source|test("sock")|not).source|split($pwd)|.[1]?')
@@ -1016,7 +836,6 @@ create_configmaps() {
 			index=$(($index + 1))
 			tab_CM[$index]=$i
 		done 
-	# echo ${tab_CM[@]}
 
 	index=-1
 	for i in $CM_RENAMED
@@ -1024,7 +843,6 @@ create_configmaps() {
 			index=$(($index + 1))
 			tab_CM_RENAMED[$index]=$i
 		done 
-	# echo ${tab_CM_RENAMED[@]}
 
 	index=-1
 	for i in $CM_RENAMED_short
@@ -1032,7 +850,6 @@ create_configmaps() {
 			index=$(($index + 1))
 			tab_CM_RENAMED_short[$index]=$i
 		done 
-	# echo ${tab_CM_RENAMED[@]}
 
 	if [[ ! -d './volumes' ]]; 
 		then
@@ -1052,8 +869,6 @@ create_configmaps() {
 				done
 			fusermount -u $PWD/volumes
 	fi
-
-	# echo "############################################"
 }
 
 patch_labels() {
@@ -1061,8 +876,6 @@ patch_labels() {
 		do  
 			echo "patching labels of $i .............. "
 			cat $i |yq -ojson |jq -r '(.metadata|.labels."io.kompose.service")=.metadata.name' | yq -P | sponge $i 
-			# label=$(cat $i |yq -ojson |jq -r '.metadata|select(has("labels"))|.labels."io.kompose.service"' | cut -c 1-63)
-			# cat $i |yq -ojson |jq -r --arg namespace "$namespace" '(.metadata|.labels."io.kompose.service")="\($namespace)"' | yq -P | sponge $i 
 		done
 }
 
@@ -1117,10 +930,8 @@ if [ -n "$KOMPOSE" ] && [ "$KOMPOSE" = "kompose" ]; then
 	patch_secretKeys
 	title "3.2.2" "Patching network manifests"
 	patch_networkPolicy $ENV
-	# create_pv_applis $ENV
 	title "3.2.3" "Patching storage manifests"
 	create_pv2 $ENV $NAME
-	# patch_pvc $ENV
 	title "3.2.4" "Patching file manifests"
 	patch_configmaps $CLEANED
 	patch_labels	
@@ -1231,9 +1042,7 @@ for i in $volumes
 
 
 #Calcul des tailles des disques persistants
-# size_calculation () {
 copy_to_okd () {
-# compose=$(docker-compose config --format json)
 if [[ $1 = "bind" ]]
 	then
 		SOURCES=$(cat $NAME.yml | yq -ojson | jq -r --arg type $1 --arg DIR "${PWD##*/}" '(.services[].volumes[]?|select(.type=="\($type)")|select(.source|test("home|root")))|={source: .source|split("\($DIR)")|.[1], type: .type, target: .target}|del (.services[].volumes[]?|select(.source|test("sock")))| del (.services[].volumes[]?|select(.source|test("/applis")))|.services|to_entries[]|{sources: (.key + ":." + (.value|select(has("volumes")).volumes[]|select(.type=="\($type)")|select(.source!=null)|select(.source|test("(\\.[^.]+)$")|not)|.source))}|.sources')
@@ -1285,14 +1094,10 @@ if [ -n "$SOURCES" ]
 			done
 
 		length=$(echo "${tab3[*]}" | jq -s 'length')
-		# echo "LENGTH: $length"
 		for ((i=0; i<$length; i++ ))
 			do
 				tab4[$i]=$(echo "${tab3[*]}" | jq -s --arg i "$i" '.[$i|tonumber]')
 			done		
-
-		# echo "affichage du tableau"
-		# echo TAB: "${tab3[*]}"
 
 		for i in "${tab4[@]}"; do
 		if [ "$i" != "null" ]; then
@@ -1302,149 +1107,106 @@ if [ -n "$SOURCES" ]
 
 		volumes=("${templist[@]}")
 		index=0
-		# echo "${volumes[*]}" 
-		# exit
 		mount_points=$(echo $nfs_mount_points | jq -rs '.[]|.mount_point|split("/")|last')
-		# echo $mount_points
 
 		select_nfs_mount_point() {
-			# for i in $(echo "${volumes[@]}" |jq -r '.value.volumes[].source|split("/")|last')
-			# for n in $(echo "$i" |jq -r '.value.volumes[].source|split("/")|last')
-				# do 
 				toto=$(echo "$i" |jq -r '.value.volumes[].source|split("/")|last')
 					for j in $mount_points
 						do 
-							# echo DEBUG1 $toto:$j
 							echo "$toto" | grep "$j" > /dev/null
 							if [ "$?" == "0" ]
 								then 
 									mount_point=$(echo $nfs_mount_points |jq -rs --arg j "$j" '.[]|select(.mount_point|test("\($j)")).mount_point|split("/")|last')
-									# echo toto: $mount_point
-								# else
-								# 	mount_point=empty
 							fi
 						done
-				# done
 		}
-
-		# select_nfs_mount_point
-		# echo $mount_point
-		# exit
 
 		# Change size of volumeclaim yaml declaration
 		for i in "${volumes[@]}"; 
 			do 
 				select_nfs_mount_point
-				# echo DEBUG2 $mount_point
-				# echo "yes:" $i
 				size=$(echo $i | jq -r '.value.volumes[]?.size'|uniq)
-				# echo $size
 				source=$(echo $i | jq -r '.value.volumes[]?.source'|uniq)
-				# echo $source
 				service=$(echo $i | jq -r '.key'|uniq)
-				# echo $service
-				# for k in $mount_point
-				# 	do
-				# 		echo DEBUG3: $k: "${source##*/}"
-						if [ "$mount_point" != "${source##*/}" ] ; then
-							for j in $(echo $i | jq -r --arg service "$service" 'select(.key=="\($service)").value.volumes[].target')
-								do 
-									index=$(echo "${volumes[*]}" |jq -s --arg j "$j" --arg service "$service" '[group_by(.key)[]|.[]|select(.key=="\($service)").value.volumes[0]]|[.[].target]|index("\($j)")')
-									# echo index: $index
-									if [[ $1 = "bind" ]]
-										then
-											file="${service}-claim${index}-persistentvolumeclaim.yaml"
-											# echo $file
-											file_name="${service}-claim${index}"
-											# echo $file_name
-										else
-											file="${source}-persistentvolumeclaim.yaml"
-											file_name="${source}"
-									fi
+				if [ "$mount_point" != "${source##*/}" ] ; then
+					for j in $(echo $i | jq -r --arg service "$service" 'select(.key=="\($service)").value.volumes[].target')
+						do 
+							index=$(echo "${volumes[*]}" |jq -s --arg j "$j" --arg service "$service" '[group_by(.key)[]|.[]|select(.key=="\($service)").value.volumes[0]]|[.[].target]|index("\($j)")')
+							if [[ $1 = "bind" ]]
+								then
+									file="${service}-claim${index}-persistentvolumeclaim.yaml"
+									file_name="${service}-claim${index}"
+								else
+									file="${source}-persistentvolumeclaim.yaml"
+									file_name="${source}"
+							fi
 
-									status=""
-									# echo $file_name
-									search_pvc=$(oc get pvc -o json | jq --arg file_name $file_name '.items[]|.metadata|select(.name=="\($file_name)")')
-									if [ -n "$search_pvc" ]
-										then
-											while [ "$status" != "Bound" ] && [ -n "$file_name" ]
-												do
-													echo "Waiting for pvc to be ready...."
-													status=$(oc get pvc $file_name -o json | jq -r '.status.phase')
-													sleep 5
-												done
+							status=""
+							search_pvc=$(oc get pvc -o json | jq --arg file_name $file_name '.items[]|.metadata|select(.name=="\($file_name)")')
+							if [ -n "$search_pvc" ]
+								then
+									while [ "$status" != "Bound" ] && [ -n "$file_name" ]
+										do
+											echo "Waiting for pvc to be ready...."
+											status=$(oc get pvc $file_name -o json | jq -r '.status.phase')
+											sleep 5
+										done
 
-											is_nfs=$(oc get pvc $file_name -o json | jq -r '.spec.storageClassName|test("nfs")')
-											if [[ $is_nfs != "true" ]]
-												then
-													echo "Resizing $file_name to $size ................"
-													# exit
-													cat ${file} | 
-														yq eval -ojson| 
-														jq --arg size "$size" '.spec.resources.requests.storage=$size'| 
-														yq eval -P |
-													sponge ${file}
-													oc apply -f ${file}
-													echo ""
-											fi
+									is_nfs=$(oc get pvc $file_name -o json | jq -r '.spec.storageClassName|test("nfs")')
+									if [[ $is_nfs != "true" ]]
+										then
+											echo "Resizing $file_name to $size ................"
+											cat ${file} | 
+												yq eval -ojson| 
+												jq --arg size "$size" '.spec.resources.requests.storage=$size'| 
+												yq eval -P |
+											sponge ${file}
+											oc apply -f ${file}
+											echo ""
 									fi
-								done
-						fi
-					# done
+							fi
+						done
+				fi
 			done
-		# }
-		# exit
 
 		read -p "$(italics "?? Would you like to copy current data to okd volume of type $1 (may be long)? (y/n).......................................$(faint "[y]")")" answer
 		answer=${answer:-y}
 		private_key=$(cat ~/.ssh/${key:-id_rsa})
-		# echo "answer: $answer"
 		if [[ "$answer" = "y" ]];
 			then
-				# size_calculation $1
 				for i in "${volumes[@]}"; 
 					do 
 						select_nfs_mount_point
 						service=$(echo $i | jq -r '.key')
-						# echo $service
 						target=$(echo $i | jq -r '.value.volumes|last.target')
-						# echo $target
 						source=$(echo $i | jq -r '.value.volumes|last.source')
-						# echo $source
-						# private_key=$(cat ~/.ssh/id_rsa)
-						# for k in $mount_point
-						# 	do
-								# echo $k: "${source##*/}"
-								if [ "$mount_point" != "${source##*/}" ]; then
-									if [[ "$(echo $source| grep backup)" != '' ]];
+
+						if [ "$mount_point" != "${source##*/}" ]; then
+							if [[ "$(echo $source| grep backup)" != '' ]];
+								then
+									src=$source
+								else
+									if [[ $1 = "bind" ]]
 										then
-											src=$source
+											src="/opt/pod/${NAME}-docker/${source}"
 										else
-											if [[ $1 = "bind" ]]
-												then
-													src="/opt/pod/${NAME}-docker/${source}"
-												else
-													src="/var/lib/docker/volumes/${NAME}-docker_${source}/_data/"
-											fi
+											src="/var/lib/docker/volumes/${NAME}-docker_${source}/_data/"
 									fi
-									size=$(echo $i | jq -r '.value.volumes[].size')
-									echo "###########################################################################"
-									echo -e "$service:\nPaste those commands to copy data:"
-									echo -e "${YELLOW}from${ENDCOLOR} ${docker_host}:${src}/ ${YELLOW}to${ENDCOLOR} persistent volume ($size):\n"
-									blue "mkdir /root/.ssh && echo \"$private_key\" > /root/.ssh/id_rsa && chmod 600 -R /root/.ssh; \
+							fi
+							size=$(echo $i | jq -r '.value.volumes[].size')
+							echo "###########################################################################"
+							echo -e "$service:\nPaste those commands to copy data:"
+							echo -e "${YELLOW}from${ENDCOLOR} ${docker_host}:${src}/ ${YELLOW}to${ENDCOLOR} persistent volume ($size):\n"
+							blue "mkdir /root/.ssh && echo \"$private_key\" > /root/.ssh/id_rsa && chmod 600 -R /root/.ssh; \
 if [ \"\$(cat /etc/os-release|grep "alpine")\" = '' ]; \
 then apt update && apt install rsync openssh-client -y;  \
 else apk update && apk -f add rsync openssh-client-default openssh-client; fi; \
 rsync -av -e 'ssh -o StrictHostKeyChecking=no' ${docker_host}:${src}/ ${target}/; \
 exit"
-									echo "###########################################################################"
-									POD=$(oc get pods -o json| jq -r --arg service "$service" '.items[]|.metadata|select(.name|test("\($service)-[b-df24-9]+-[b-df-hj-np-tv-z24-9]{5}"))|.name')
-									# sleep 10
-									oc debug $POD --as-root=true
-									# echo "oc rsync --progress=true ./volume_${service} $POD-debug:${target} --strategy=tar"
-									# oc rsync --progress=true ./volume_${service} $POD-debug:${target}
-								fi
-							# done
+							echo "###########################################################################"
+							POD=$(oc get pods -o json| jq -r --arg service "$service" '.items[]|.metadata|select(.name|test("\($service)-[b-df24-9]+-[b-df-hj-np-tv-z24-9]{5}"))|.name')
+							oc debug $POD --as-root=true
+						fi
 					done
 		fi
 	else
@@ -1483,19 +1245,30 @@ if [[ "$answer" == "y" ]];
 			else
 				release_pv $NAME
 				while true; do
-					read -p "$(italics "?? Would you like to create a new project?(y/n)....................................: $(faint "[y]")")" yn
+					read -p "$(italics "?? Would you like to create a new project? (y/n)....................................$(faint "[y]")"): " yn
 					yn=${yn:-y}
 					case $yn in
 						[Yy]* )                         
-							read -p "$(italics "?? Enter the name of the project $(faint "[$namespace]")....................................")" project
+							read -p "$(italics "?? Enter the name of the project $(faint "[$namespace]")....................................:") " project
 							project=${project:-$namespace}
 							oc new-project $project
 							echo -e "Setting SCC anyuid to default SA.......................................\n"
 							oc adm policy add-scc-to-user anyuid -z default
-							echo -e "Creation of docker secret for pulling images without restriction.......................................\n"
-							oc create secret docker-registry docker.io --docker-server=docker.io --docker-username=picabesesr --docker-password=SVmx2Puw3scbcb4J
-							oc secrets link default docker.io --for=pull
-							echo -e "\n"
+							read -p "$(italics "?? Do you want to authenticate against DockerHub? $(faint "[n]")"): " ynyn
+							ynyn=${ynyn:-n}
+							case $ynyn in
+								[Yy]* ) 
+									read -p "$(italics "?? DockerHub server $(faint "[docker.io]")"): " dh_server
+									dh_server=${dh_server:-docker.io}
+									read -p "$(italics "?? DockerHub username" ): " dh_user
+									read -p "$(italics "?? DockerHub password" ): " dh_passwd
+									echo -e "Creation of docker secret for pulling images without restriction.......................................\n"
+									oc create secret docker-registry docker.io --docker-server=${dh_server} --docker-username=${dh_user} --docker-password=${dh_passwd}
+									oc secrets link default docker.io --for=pull
+									echo -e "\n"
+									;;
+							esac
+
 							break;;
 						[Nn]* )
 							break;;
@@ -1521,14 +1294,12 @@ if [[ "$answer" == "y" ]];
 		copy_to_okd bind
 		title "5.2" "Copy data to pvc of type volume"
 		copy_to_okd volume
-		# exit 1
 fi
 
 
-# 9> Redémarrage des pods et URL de connexion
+# Redémarrage des pods et URL de connexion
 
 step "FINAL" "Pods reload and connexion URL"
-# if [[ $answer != "y" ]]; then exit; fi
 read -p "$(italics "?? Reloading pods to launch \"$NAME\" $(faint "[y]") : ?")" yn
 yn=${yn:-y}
 case $yn in
@@ -1548,8 +1319,6 @@ for i in $services
 		oc expose svc $i
 	done
 	
-# oc expose svc $NAME-front
-# URL=$(oc get route -o json | jq --arg NAME "$NAME" -r '.items[]|.spec|select(.host|test("\($NAME)-front"))|.host')
 URL=$(oc get route -o json | jq  -r '[.items[]|.spec]|first|.host')
 title "###" "Congratulations!"
 echo -e "You can reach $NAME application at: "
