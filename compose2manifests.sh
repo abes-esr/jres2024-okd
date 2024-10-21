@@ -61,6 +61,10 @@ blue () {
 	echo -e "${BLUE}$1${ENDCOLOR}"
 }
 
+red () {
+	echo -e "${RED}$1${ENDCOLOR}"
+}
+
 faint () {
 	echo -e "${FAINT}$1${ENDCOLOR}"
 }
@@ -206,6 +210,43 @@ fi
 echo "################################################################################################################################"
 echo -e ""
 
+set_ssh_key() {
+
+			if [[ $( ls ~/.ssh | grep "id" ) == '' ]]
+				then
+					read -p "$(italics "?? No pub keys have been found. Do you want to generate? $(faint "[y]")"): " yn3
+					yn3=${yn3:-y}
+					case $yn3 in
+						[Yy]* )
+							ssh-keygen;;
+						[Nn]* )
+							italics "You must first install some pub key before using this script"
+							exit;;
+					esac											
+				else
+					if [ -z "$key" ]; then 
+						echo -e  "Here are the available public keys in your home directory:"
+						for k in $(ls ~/.ssh/ |grep pub|cut -d"." -f1); do blue $k; done
+						read -p "$(italics "?? Which one do you want to use to connect to your Docker hosts? $(faint "[id_rsa]")"): " key
+						key=${key:-id_rsa}
+						blue $key
+					fi
+			fi
+}
+
+install_ssh_key() {
+	# read -p "$(italics "?? Do you want to copy them on host docker? [y]")" yn2	
+	# yn2=${yn2:-y}
+	# case $yn2 in
+	# [Yy]* )
+		italics "Installing pub keys......."
+		ssh-copy-id root@${i}.${domain}
+# 	[Nn]* )
+# 		italics "You must first install some pub key before using this script"
+# 		exit;;
+# esac
+}
+
 testing_ssh() {
 
 echo "Checking ssh connectivity to Docker hosts to bind ...."
@@ -217,49 +258,29 @@ for i in $docker_hosts
 				echo "Connexion to root@${i}.${domain} ........... $(blue OK)"
 			else 
 				echo "Connexion to root@${i}.${domain} ........... $(red NOK)"
-				echo "Please upload your public ssh key to root@${i}.${domain}"
-				read -p "$(italics "?? Do you want to configure an existing key: $(faint "[y]")?")" yn
+				# echo "Please upload your public ssh key to root@${i}.${domain}"
+				read -p "$(italics "?? Do you want to install $key to root@${i}.${domain}: $(faint "[y]")?") " yn
 				yn=${yn:-y}
 				while true; do
-				case $yn in
-					[Yy]* )
-						if [[ $( ls ~/.ssh | grep "id" ) == '' ]]
-							then
-								read -p "$(italics "?? No pub keys have been found. Do you want to generate? $(faint "[y]")")" yn3
-								yn3=${yn3:-y}
-								case $yn3 in
-									[Yy]* )
-										ssh-keygen;;
-									[Nn]* )
-										italics "You must first install some pub key before using this script"
-										exit;;
-								esac											
-							else
-								italics  "Here are the available public key in your home directory:"
-								ls ~/.ssh/ |grep pub
-								read -p "$(italics "?? Do you want to copy them on host docker? [y]")" yn2
-								yn2=${yn2:-y}
-								case $yn2 in
-									[Yy]* )
-										italics "Installing pub keys......."
-										ssh-copy-id root@${i}.${domain}
-										break;;
-									[Nn]* )
-										italics "You must first install some pub key before using this script"
-										exit
-										break;;
-								esac
-						fi;;
-
-					[Nn]* )
-						italics "You must first install some pub key before using this script"
-						exit
-						break;;							
-				esac; done
+					case $yn in
+						[Yy]* )
+							set_ssh_key
+							echo -e "Installing pub keys......."
+							ssh-copy-id root@${i}.${domain} > /dev/null
+							message
+							break;;
+						[Nn]* )
+							italics "You must first install some pub key before using this script"
+							exit
+							break;;							
+					esac; done
 		fi
 	done
 
 }
+
+# Check ssh key presence 
+set_ssh_key
 
 # Docker hosts domain identification
 dom=$(hostname -d)
@@ -1069,7 +1090,14 @@ if [[ -n $services ]]
 		done
 fi
 
-sleep 2
+read -p "$(italics "?? Is this correct to be deployed? $(faint "[y]")............: ")" yn
+yn=${yn:-y}
+case $yn in
+	[Yy]* )	blue "Converting \"docker-compose.yml\" into k8s manifests..."
+			sleep 2;;
+		* ) blue "Bye"
+		    exit;;
+esac
 
 applis_svc=$(cat $NAME.yml | yq eval -ojson | \
 	jq -r '.services|to_entries[]| [{services: .key, volumes: .value.volumes[]|select(.source|test("/appli"))}]?|.[].services'|uniq)
@@ -1341,7 +1369,9 @@ if [ -n "$SOURCES" ]
 										then
 											while [ "$status" != "Bound" ] && [ -n "$file_name" ]
 												do
+													echo "Waiting for pvc to be ready...."
 													status=$(oc get pvc $file_name -o json | jq -r '.status.phase')
+													sleep 5
 												done
 
 											is_nfs=$(oc get pvc $file_name -o json | jq -r '.spec.storageClassName|test("nfs")')
@@ -1355,6 +1385,7 @@ if [ -n "$SOURCES" ]
 														yq eval -P |
 													sponge ${file}
 													oc apply -f ${file}
+													echo ""
 											fi
 									fi
 								done
@@ -1366,6 +1397,7 @@ if [ -n "$SOURCES" ]
 
 		read -p "$(italics "?? Would you like to copy current data to okd volume of type $1 (may be long)? (y/n).......................................$(faint "[y]")")" answer
 		answer=${answer:-y}
+		private_key=$(cat ~/.ssh/${key:-id_rsa})
 		# echo "answer: $answer"
 		if [[ "$answer" = "y" ]];
 			then
@@ -1379,7 +1411,7 @@ if [ -n "$SOURCES" ]
 						# echo $target
 						source=$(echo $i | jq -r '.value.volumes|last.source')
 						# echo $source
-						private_key=$(cat ~/.ssh/id_rsa)
+						# private_key=$(cat ~/.ssh/id_rsa)
 						# for k in $mount_point
 						# 	do
 								# echo $k: "${source##*/}"
@@ -1421,7 +1453,7 @@ fi
 }
 
 release_pv() {
-	for i in $(oc get pv -ojson | jq -r --arg NAME "$1" '.items[].metadata|select(.name|test("applis-\($NAME)")).name')
+	for i in $(oc get pv -ojson | jq -r --arg NAME "$1" '.items[].metadata|select( (.name|test("\($NAME)")) and (.name|test("nfs")) ).name')
 		do
 			echo -e "Releasing pv applis-$i..........................................................\n"
 			oc patch pv $i -p '{"spec":{"claimRef": null}}'
@@ -1519,7 +1551,7 @@ for i in $services
 # oc expose svc $NAME-front
 # URL=$(oc get route -o json | jq --arg NAME "$NAME" -r '.items[]|.spec|select(.host|test("\($NAME)-front"))|.host')
 URL=$(oc get route -o json | jq  -r '[.items[]|.spec]|first|.host')
-title "" "Congratulations!"
+title "###" "Congratulations!"
 echo -e "You can reach $NAME application at: "
 blue "http://$URL\n"
 
