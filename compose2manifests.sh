@@ -277,7 +277,7 @@ echo ""
 
 
 ask_testing_ssh() {
-echo "${YELLOW}!!! Warning !!!${ENDCOLOR}"
+echo -e "${YELLOW}!!! Warning !!!${ENDCOLOR}"
 read -p "$(italics "?? Do you want to check ssh connectivity? If a host is not reacheable, pub key will be installed.[no]: ")" yn
 yn=${yn:-n}
 while true; do
