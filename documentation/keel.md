@@ -100,7 +100,7 @@ modifiable dans okd 4.
 
 Les images sur docker.io peuvent être bloquées par un nombre de
 tentatives sans compte. On peut enlever cette limite en s\'authentifiant
-avec ***REMOVED***
+avec picabesesr
 
 ``` bash
 oc create secret docker-registry docker.io --docker-server=docker.io --docker-username= --docker-password=
