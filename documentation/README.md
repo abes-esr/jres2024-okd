@@ -43,3 +43,5 @@ Cette documentation est donnée à titre d'exemple du travail collaboratif accom
 \- [OpenDataFoundation](odf.md)
 
 \- [Registry d\'images](registry.md)
+
+\- [Usage de compose2manifests.sh](compose2manifests_functions.md)
