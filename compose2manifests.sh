@@ -1,8 +1,8 @@
 #!/bin/bash
-# 24/10/21 NBT
+# 24/10/21 blanchet<at>abes.fr
 # Script de conversion d'un fichier docker-compose.yaml en manifests k8s
-# Génère 3 types de manifest: deploy, services, configMap
-# Nécessite les paquets jq, yq, moreutils, docker-compose, kompose
+# Génère pour chacun des services ces manifest: deploy, services, configMap, secret, persistentVolumeClaim
+# Nécessite les paquets jq, yq, jc, moreutils, docker-compose, kompose
 # Usage:
 # ./compose2manifests.sh [ prod || test || dev || local ] [ appli_name ] [default || '' || secret || env_file | help] [kompose] [helm]\n"
 
