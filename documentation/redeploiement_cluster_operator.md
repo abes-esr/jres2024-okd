@@ -4,7 +4,7 @@ Les **cluster operators** sont les services kubernetes essentiels au
 fonctionnement du cluster OKD. Ils se déploient également sous la forme
 de pods tournant exclusivement sur les masters.
 
-``` /bash
+``` bash
 oc get co
 
 NAME                                       VERSION                          AVAILABLE   PROGRESSING   DEGRADED   SINCE   MESSAGE
@@ -51,7 +51,7 @@ Le namespace dans lequel ils évoluent est de la forme
 
 Voici la marche à suivre pour les relancer:
 
-``` /bash
+``` bash
 NAMESPACE=openshift-etcd
 oc get co etcd
 oc get co etcd -o json | jq -r '.status.conditions[] | select(.type =="Degraded")'
@@ -64,7 +64,7 @@ oc patch etcd/cluster --type merge -p "{\"spec\":{\"forceRedeploymentReason\":\"
 oc get co
 ```
 
-``` /bash
+``` bash
 NAMESPACE=openshift-kube-apiserver
 oc get co kube-apiserver
 oc get co kube-apiserver -o json | jq -r '.status.conditions[] | select(.type =="Degraded")'

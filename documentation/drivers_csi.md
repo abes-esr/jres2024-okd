@@ -32,7 +32,7 @@ donc `csi.ovirt.org`.
 On retrouve toute les parties nécessaires au fonctionnement de ce driver
 dans le namespace `openshift-cluster-csi-drivers`
 
-``` /bash
+``` bash
 oc get all -n openshift-cluster-csi-drivers
 NAME                                               READY   STATUS    RESTARTS          AGE
 pod/ovirt-csi-driver-controller-7548ffcb77-8wgnd   7/7     Running   506 (4d1h ago)    336d
@@ -70,14 +70,14 @@ replicaset.apps/ovirt-csi-driver-operator-757955c497     1         1         1  
 De plus, on retrouve les paramètres d\'accès à l\'api d\'ovirt sous
 forme de secret déclaré dans le deployment `ovirt-csi-driver-controller`
 
-``` /bash
+``` bash
 oc describe secrets -n openshift-cluster-csi-drivers ovirt-credentials
 ```
 
 Pour utiliser ce driver, Kubernetes a besoin de la défintion d\'une
 `storageClass`
 
-``` /bash
+``` bash
 NAME                                  PROVISIONER                             RECLAIMPOLICY   VOLUMEBINDINGMODE   ALLOWVOLUMEEXPANSION   AGE
 nfs-csi                               nfs.csi.k8s.io                          Delete          Immediate           false                  146m
 nfs-csi3                              nfs.csi.k8s.io                          Delete          Immediate           false                  58m
@@ -94,7 +94,7 @@ autre, il faut rajouter l\'annotation
 **storageclass.kubernetes.io/is-default-class: \"true\"** à la classe
 choisie.
 
-``` /yaml
+``` yaml
 metadata:
   annotations:
     storageclass.kubernetes.io/is-default-class: "true"
@@ -103,7 +103,7 @@ metadata:
 Dès lors, lors de la création d\'un pvc, on pourra choisir la storage
 class de son choix:
 
-``` /yaml
+``` yaml
 spec:
   accessModes:
   - ReadWriteMany
@@ -141,20 +141,20 @@ L\'installation se fait à partir de l\'opérateur du même nom dans
 
 -   `infra` node-role label
 
-``` /bash
+``` bash
 oc label node <node> node-role.kubernetes.io/infra=""
 oc label node <node> cluster.ocs.openshift.io/openshift-storage=""
 ```
 
 -   `tainted`
 
-``` /bash
+``` bash
 oc adm taint node <node> node.ocs.openshift.io/storage="true":NoSchedule
 ```
 
 -   Result
 
-``` /bash
+``` bash
 oc get nodes 
 NAME                          STATUS   ROLES                  AGE    VERSION
 orchidee-ccbm8-master-0       Ready    control-plane,master   446d   v1.25.7+eab9cc9
@@ -177,7 +177,7 @@ orchidee-ccbm8-worker-hxmn4   Ready    infra,worker   375d   v1.25.7+eab9cc9
 
 <https://www.ibm.com/docs/fr/storage-fusion/2.4?topic=services-openshift-data-foundation>
 
-``` /bash
+``` bash
 oc describe storagecluster -n openshift-storage ocs-storagecluster
 ---
   Storage Device Sets:
@@ -207,7 +207,7 @@ Toutes les commandes suivantes affirment que le `clusterStorage` ODF est
 composé de 3 pods **rook-ceph-osd** qui résident sur les 3 noeuds
 `infra` et qui distribuent chacun un stockage distribué de 512GB
 
-``` /bash
+``` bash
 oc describe cephcluster -n openshift-storage
 oc -n openshift-storage get pvc
 NAME                                       STATUS   VOLUME                                     CAPACITY   ACCESS MODES   STORAGECLASS                  AGE
@@ -231,7 +231,7 @@ Used By:       rook-ceph-osd-1-78d5dffbd6-f7vv7
 
 L\'opérateur installe 2 nouveaux drivers csi:
 
-``` /bash
+``` bash
 oc get csidrivers.storage.k8s.io 
 NAME                                    ATTACHREQUIRED   PODINFOONMOUNT   STORAGECAPACITY   TOKENREQUESTS   REQUIRESREPUBLISH   MODES                  AGE
 csi.ovirt.org                           true             false            false             <unset>         false               Persistent             439d
@@ -241,7 +241,7 @@ openshift-storage.rbd.csi.ceph.com      true             false            false 
 
 avec deux nouvelles classes associées:
 
-``` /bash
+``` bash
 oc get sc
 NAME                                  PROVISIONER                             RECLAIMPOLICY   VOLUMEBINDINGMODE   ALLOWVOLUMEEXPANSION   AGE
 ocs-storagecluster-ceph-rbd           openshift-storage.rbd.csi.ceph.com      Delete          Immediate           true                   368d
@@ -291,13 +291,13 @@ Puis suivre les étapes suivantes:
 
 Créer un namespace
 
-``` /bash
+``` bash
 kubectl create namespace unity
 ```
 
 Ajouter l\'authentification Dockerhub:
 
-``` /bash
+``` bash
 oc create secret docker-registry docker.io --docker-server=docker.io --docker-username= --docker-password=
 oc secrets link unity-controller docker.io --for=pull
 oc secrets link unity-node docker.io --for=pull
@@ -305,7 +305,7 @@ oc secrets link unity-node docker.io --for=pull
 
 Créer un fichier secret.yaml
 
-``` /bash
+``` bash
    storageArrayList:
    - arrayId: "CKM00164400884"                 # unique array id of the Unisphere array
      username: "admin"                        # username for connecting to API
@@ -317,7 +317,7 @@ Créer un fichier secret.yaml
 
 Créer le secret à partir de secret.yaml
 
-``` /bash
+``` bash
 kubectl create secret generic unity-creds -n unity --from-file=config=secret.yaml
 kubectl create secret generic unity-creds -n unity --from-file=config=secret.yaml -o yaml --dry-run | kubectl replace -f -
 ```
@@ -325,20 +325,20 @@ kubectl create secret generic unity-creds -n unity --from-file=config=secret.yam
 Choisir sa version driver à partir de la page
 <https://github.com/dell/csm-operator/tree/main/samples>
 
-``` /bash
+``` bash
 curl https://raw.githubusercontent.com/dell/csm-operator/main/samples/storage_csm_unity_v2100.yaml | kubectl create -f -
 ```
 
 On vérifie que le déploiement du driver:
 
-``` /bash
+``` bash
 kubectl get all -n unity
 kubectl get csm -n unity
 ```
 
 Vérification de la présence du driver **csi-unity.dellemc.com**
 
-``` /bash
+``` bash
 oc get csidrivers.storage.k8s.io 
 NAME                                    ATTACHREQUIRED   PODINFOONMOUNT   STORAGECAPACITY   TOKENREQUESTS   REQUIRESREPUBLISH   MODES                  AGE
 csi-unity.dellemc.com                   true             true             true              <unset>         false               Persistent,Ephemeral   6d19h
@@ -348,7 +348,7 @@ Il reste à installer les storageClass à partir de
 <https://github.com/dell/csi-unity/tree/main/samples> exemple pour le
 fc:
 
-``` /bash
+``` bash
 curl https://raw.githubusercontent.com/dell/csi-unity/main/samples/storageclass/unity-fc.yaml | kubectl apply -f -
 ```
 
@@ -374,26 +374,26 @@ multiple
 
 <https://github.com/kubernetes-csi/csi-driver-nfs/blob/master/docs/install-csi-driver-v4.7.0.md>
 
-``` /bash
+``` bash
 curl -skSL https://raw.githubusercontent.com/kubernetes-csi/csi-driver-nfs/v4.7.0/deploy/install-driver.sh | bash -s v4.7.0 --
 ```
 
 On vérifie:
 
-``` /bash
+``` bash
 kubectl -n kube-system get pod -o wide -l app=csi-nfs-controller
 kubectl -n kube-system get pod -o wide -l app=csi-nfs-node
 ```
 
 On crée une storage Class:
 
-``` /bash
+``` bash
 curl https://raw.githubusercontent.com/kubernetes-csi/csi-driver-nfs/master/deploy/v4.7.0/storageclass.yaml | kubectl apply -f -
 ```
 
 ou
 
-``` /bash
+``` bash
 cat <<EOF | oc apply -f -
 ---
 apiVersion: storage.k8s.io/v1
@@ -416,7 +416,7 @@ EOF
 
 Vérification de la présence du driver **nfs.csi.k8s.io**
 
-``` /bash
+``` bash
 oc get csidrivers.storage.k8s.io 
 NAME                                    ATTACHREQUIRED   PODINFOONMOUNT   STORAGECAPACITY   TOKENREQUESTS   REQUIRESREPUBLISH   MODES                  AGE
 nfs.csi.k8s.io                          false            false            false             <unset>         false               Persistent             6d1h
@@ -432,14 +432,14 @@ puisse agir avec des droits root.
 
 -   Partage sur methana:
 
-``` /bash
+``` bash
 cat /etc/exports
 /pool_SAS_2/OKD *(rw,root_squash)
 ```
 
 -   Création de la StorageClass
 
-``` /bash
+``` bash
 oc apply -f - <<EOF
 apiVersion: storage.k8s.io/v1
 kind: StorageClass
@@ -458,7 +458,7 @@ EOF
 
 -   Création du pvc
 
-``` /bash
+``` bash
 oc apply -f - <<EOF
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -478,14 +478,14 @@ EOF
 
 -   Utilisation du pvc précédemment créé dans un deployment:
 
-``` /bash
+``` bash
 oc set volume deploy/movies-wikibase-mysql --add --name=movies-wikibase-mysql-claim6  --claim-name=movies-wikibase-mysql-claim6 --mount-path /var/lib/mysql/
 ```
 
 Si on regarde sur le partage de methana, on observe bien la création
 d\'un répertoire:
 
-``` /bash
+``` bash
 [root@methana pool_SAS_2]# ll OKD
 total 4
 drwxr-xr-x. 6 nobody nobody 4096 May  7 17:24 pvc-48d777ae-dde9-4c27-85c6-4390a13b26fe
@@ -501,7 +501,7 @@ répertoire `/var/lib/mysql`
 -   On rajoute donc l\'uid `65534` comme ayant utilisateur qui déploie
     l\'image:
 
-``` /bash
+``` bash
 oc get -o json deployment movies-wikibase-mysql | jq '.spec.template.spec.containers[]+={securityContext:{allowPrivilegeEscalation: true, runAsUser: 65534}}' | oc apply -f -
 # ou bien
 oc patch deployment movies-wikibase-mysql -p '{"spec":{"template":{"spec":{"containers:[{"securityContext":{"allowPrivilegeEscalation": "true", "runAsUser": "65534"}}]}}}}'

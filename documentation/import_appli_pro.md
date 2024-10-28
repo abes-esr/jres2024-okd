@@ -35,7 +35,7 @@ Le fichier docker-compose source
 
 ### oc
 
-``` /bash
+``` bash
 wget https://github.com/okd-project/okd/releases/download/4.12.0-0.okd-2023-02-18-033438/openshift-client-linux-4.12.0-0.okd-2023-02-18-033438.tar.gz
 tar xvzf openshift-client-linux-4.12.0-0.okd-2023-02-18-033438.tar.gz
 mv {kubectl,oc} /usr/local/bin/
@@ -43,7 +43,7 @@ mv {kubectl,oc} /usr/local/bin/
 
 ### docker-compose
 
-``` /bash
+``` bash
 curl -L "https://github.com/docker/compose/releases/download/v2.16.0/docker-compose-linux-x86_64" -o /usr/local/bin/docker-compose
 ```
 
@@ -53,13 +53,13 @@ L\'import de `Qualimarc dans OKD` réside dans l\'adaptation du fichier
 `docker-compose.yaml` en fichiers manifest d\'objets k8s grâce à
 l\'outil `kompose`.
 
-``` /bash
+``` bash
 curl -L https://github.com/kubernetes/kompose/releases/download/v1.28.0/kompose-linux-amd64 -o /usr/local/bin/kompose
 ```
 
 ### droits d\'exécution
 
-``` /bash
+``` bash
 chmod +x /usr/local/bin/{oc,kompose,docker-compose}
 ```
 
@@ -68,19 +68,19 @@ chmod +x /usr/local/bin/{oc,kompose,docker-compose}
 La connexion au serveur OKD peut se faire de plusieurs manières. Les
 paramètres se trouvent dans le répertoire d\'installation du cluster:
 
-``` /bash
+``` bash
 ~<install_dir>/auth/
 ```
 
 #### fichier kubeconfig
 
-``` /bash
+``` bash
 export KUBECONFIG=~install_dir>/auth/kubeconfig
 ```
 
 #### login kubeadmin
 
-``` /bash
+``` bash
 oc login -u kubeadmin -p  $(echo ~<install_dir>/auth/kubeadmin-password)  https://api.orchidee.v102.abes.fr:6443
 ```
 
@@ -88,7 +88,7 @@ Qand on se connecte avec un login, cela permet d\'obtenir un `token`. Ce
 token peut être la seule façon de s\'authentifier par la suite,
 notamment avec podman.
 
-``` /bash
+``` bash
 oc whoami -t
 sha256~X
 ```
@@ -96,7 +96,7 @@ sha256~X
 Dans les deux cas de figure, on est connecté avec le super utilisateur
 `kubeadmin`:
 
-``` /bash
+``` bash
 oc whoami
 ```
 
@@ -106,7 +106,7 @@ Pour se connecter depuis LDAP et rafraîchir son fichier *kubeconfig*
 pour prendre en compte\
 le user avec lequel on est connecté sur le namespace *default*
 
-``` /bash
+``` bash
 oc login -u slogin
 oc config set-context `oc config current-context` --namespace=default
 ```
@@ -115,46 +115,47 @@ oc config set-context `oc config current-context` --namespace=default
 
      * Création du projet
 
-``` /bash
+``` bash
 oc new-project qualimarc
 ```
 
 -   Elevation des privilèges du `service account` `default` pour les
     droits root de certains containers:
 
-``` /bash
+``` bash
 oc adm policy add-scc-to-user anyuid -z default
 ```
 
 -   Création d\'un secret qui permet de se connecter au registry
     `dockerhub` sans limites de connexions
 
-``` /bash
+``` bash
 oc create secret docker-registry docker.io --docker-server=docker.io --docker-username= --docker-password=
 ```
 
 -   Rajout de ce secret au `service account` `default`
 
-    oc secrets link default docker.io --for=pull
-    oc get sa default -o yaml
-
+``` bash
+oc secrets link default docker.io --for=pull
+oc get sa default -o yaml
+```
 -   Téléchargement des sources du projet
 
-``` /bash
+``` bash
 git clone https://github.com/abes-esr/qualimarc-docker.git
 cd qualimarc
 ```
 
 -   import du fichier `env` de l\'environnement choisi
 
-``` /bash
+``` bash
 rsync -av root@diplotaxis1-dev.v106.abes.fr:/opt/pod/qualimarc-docker/.env .
 ```
 
 -   Génération du fichier `docker-compose-resolved.yml` contenant la
     valeur des variables `.env`
 
-``` /bash
+``` bash
 docker-compose config > docker-compose-resolved.yml
 ```
 
@@ -162,7 +163,7 @@ docker-compose config > docker-compose-resolved.yml
     `qualimarc-watchtower`) qui ne fonctionne qu\'en environnement
     docker
 
-``` /bash
+``` bash
 docker-compose -f docker-compose-resolved.yml convert --format json \
 | jq 'del (.services[].command)' \
 | jq 'del (.services[].entrypoint)' \
@@ -175,7 +176,7 @@ docker-compose -f docker-compose-resolved.yml convert --format json \
 -   **optionnel** Ajout du port `5432` pour que le service
     `qualimarc-db` soit directement disponible
 
-``` /bash
+``` bash
 docker-compose -f docker-compose-resolved.yml convert --format json | jq  '.services."qualimarc-db" += {ports: [{"mode": "ingress", "target": 5432, "published": 5432, "protocol": "tcp"}]}'
 # ou bien
 docker-compose -f docker-compose-resolved.yml convert --format json | jq --argjson json '{ports: [{"mode": "ingress", "target": 5432, "published": 5432, "protocol": "tcp"}]}' '.services."qualimarc-db" += {ports: $json}'
@@ -184,7 +185,7 @@ docker-compose -f docker-compose-resolved.yml convert --format json | jq --argjs
 -   Conversion du fichier docker-compose-resolved-cleaned.yml en
     Manifests k8s
 
-``` /bash
+``` bash
 kompose -f docker-compose-resolved-cleaned.yml convert --provider openshift
 INFO OpenShift file "qualimarc-api-service.yaml" created 
 INFO OpenShift file "qualimarc-db-service.yaml" created 
@@ -213,14 +214,14 @@ INFO OpenShift file "qualimarc-watchtower-claim0-persistentvolumeclaim.yaml" cre
 -   Remplacement de la bonne version d\'api pour les manifests
     `imagestream` et `deploymentconfig`
 
-``` /bash
+``` bash
 sed -i 's/apiVersion: v1/apiVersion: image.openshift.io\/v1/g' *imagestream.yaml 
 sed -i 's/apiVersion: v1/apiVersion: apps.openshift.io\/v1/g' *deploymentconfig.yaml
 ```
 
 -   Création du service `qualimarc-db-service.yaml`
 
-``` /bash
+``` bash
 oc create service clusterip qualimarc-db-postgres --tcp=5432
 oc set selector svc qualimarc-db-postgres 'io.kompose.service=qualimarc-db'
 #ou bien
@@ -233,7 +234,7 @@ créé par `kompose`, c\'est dû au fait que le container `qualimarc-db` du
 fichier original `docker-compose.yaml` n\'avait pas de ports de défini.
 On aurait pu le rajouter dans le fichier avant la conversion:
 
-``` /yaml
+``` yaml
   qualimarc-db:
     image: abesesr/postgres-fr_fr:15.1.0
     container_name: qualimarc-db
@@ -252,13 +253,13 @@ On aurait pu le rajouter dans le fichier avant la conversion:
 
 -   Il ne reste qu\'à appliquer les manifests dans OKD
 
-``` /bash
+``` bash
 oc apply -f 'qualimarc-*.yaml'
 ```
 
 -   On vérifie que les containers se créent bien
 
-``` /bash
+``` bash
 oc get all
 oc get pods
 ```
@@ -266,7 +267,7 @@ oc get pods
 -   Il faut vérifier que les images se téléchargent correctement depuis
     leurs registries d\'origine
 
-``` /bash
+``` bash
 oc get is
 ```
 
@@ -276,7 +277,7 @@ Si ce n\'est pas le cas, aucun container ne se lancera.
     créés.\
     Pour augmenter leur taille, passer par un patch :
 
-``` /bash
+``` bash
 oc patch pvc <pvc_name> -p '{"spec":{"resources":{"requests":{"storage":"4Gi"}}}}'
 ```
 
@@ -288,7 +289,7 @@ contenu initial depuis le volume du diplotaxis initial. Pour cela il
 n\'est pas indispensable que le container soit démarré, il suffit de
 rentrer en mode `debug` et d\'initier la copie.
 
-``` /bash
+``` bash
 oc debug qualimarc-db-4-c8gpn
 bash
 apt update && apt install rsync openssh-client -y
@@ -298,7 +299,7 @@ rsync -av diplotaxis1-dev.v106.abes.fr:/opt/pod/qualimarc-docker/volumes/qualima
 Une fois la copie effectuée avec succès, il faut relancer le déploiemen
 du container:
 
-``` /bash
+``` bash
 oc rollout retry dc qualimarc-db
 oc get pods
 ```
@@ -312,7 +313,7 @@ manifests un par un.
     `qualimarc-front`, ce qui aura pour effet de générer une route DNS
     par l\'ingress d\'OKD:
 
-``` /bash
+``` bash
 oc expose service/qualimarc-front
 oc expose service/qualimarc-api
 oc expose service/qualimarc-db-adminer
@@ -322,13 +323,13 @@ qualimarc  qualimarc-qualimarc2.apps.orchidee.v102.abes.fr  qualimarc-front 1108
 
 -   On teste le webservice sur son exposition publique:
 
-``` /bash
+``` bash
 curl http://qualimarc-api-qualimarc-sire.apps.orchidee.v102.abes.fr/api/v1/statusApplication
 ```
 
 ## Debug
 
-``` /bash
+``` bash
 oc debug <pod>
 oc log <pod>
 oc rsh pod/<pod>

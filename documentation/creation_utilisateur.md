@@ -21,18 +21,22 @@ simple à mettre en œuvre.
 
 Créer un `secret` LDAP `ldap-bind-password-676wf`
 
-    oc create secret generic ldap-bind-password-676wf --from-literal=bindPassword=levant_passwd -n openshift-config
+``` bash
+oc create secret generic ldap-bind-password-676wf --from-literal=bindPassword=levant_passwd -n openshift-config
+```
 
 #### Méthode d\'édition
 
 Éditer l\'objet `Oauth` en mode vi pour rajouter un IDP
 
-    oc edit oauth.config.openshift.io/cluster
-    oc edit oauth cluster
+``` bash
+oc edit oauth.config.openshift.io/cluster
+oc edit oauth cluster
+```
 
 Ajouter l\'IDP sous la partie `spec`:
 
-``` /yaml
+``` yaml
 spec:
   identityProviders:
   - ldap:
@@ -59,7 +63,7 @@ spec:
 
 Créer l\'objet yaml ldap_cr.yaml `OAuth`
 
-``` /yaml
+``` yaml
 apiVersion:config.openshift.io/v1
 kind: OAuth
 metadata:
@@ -88,7 +92,9 @@ spec:
 
 Il reste à appliquer la ressource au système
 
-    oc apply -f ldap_cr.yaml 
+``` bash
+oc apply -f ldap_cr.yaml 
+```
 
 ### Htpassword
 
@@ -101,26 +107,33 @@ générer des mots de passes hashés. L\'utilisation est donc statique.
 
 -   Installer htpasswd
 
-    yum install -y httpd-tools
-
+``` bash
+  yum install -y httpd-tools
+```
 -   créer un utilisateur
 
-    htpasswd -c -B -b  /tmp/users.htpasswd user1 <password>
+``` bash
+  htpasswd -c -B -b  /tmp/users.htpasswd user1 <password>
+```
 
 -   On peut par la suite ajouter des utilisateurs sans l\'option de
     création `-c`
 
-    htpasswd  -B -b  /tmp/users.htpasswd user2 <password>
+``` bash
+  htpasswd  -B -b  /tmp/users.htpasswd user2 <password>
+```
 
 -   créer un objet `secret` OKD à partir de ce fichier dans le namespace
     openshift-config
 
-      oc create secret generic htpass-secret --from-file=htpasswd=users.htpasswd -n openshift-config
-      oc get secrets -n openshift-config
+``` bash
+  oc create secret generic htpass-secret --from-file=htpasswd=users.htpasswd -n openshift-config
+  oc get secrets -n openshift-config
+```
 
 -   créer un fichier `Custom Ressource` yaml
 
-``` /yaml
+``` yaml
 apiVersion: config.openshift.io/v1
 kind: OAuth
 metadata:
@@ -138,11 +151,15 @@ spec:
 
 -   Appliquer la CR
 
-    oc apply -f </path/to/CR>
+``` bash
+  oc apply -f </path/to/CR>
+```
 
 Ou directement éditer l\'objet cluster
 
-    oc edit oauth cluster
+``` bash
+  oc edit oauth cluster
+```
 
 #### Ajout/Modification d\'un utilisateur
 
@@ -150,31 +167,33 @@ Ou directement éditer l\'objet cluster
 
 -   Récupérer le fichier htpassword hashé
 
-    oc get secret htpass-secret -ojsonpath={.data.htpasswd} -n openshift-config | base64 -d > users.htpasswd
+``` bash
+  oc get secret htpass-secret -ojsonpath={.data.htpasswd} -n openshift-config | base64 -d > users.htpasswd
+```
 
 -   Effectuer la mise à jour
 
-``` /bash
+``` bash
   htpasswd -D users.htpasswd <username>
   htpasswd  -Bb  /tmp/users.htpasswd user2 <password>
 ```
 
 -   Remplacer le fichier htpassword existant
 
-``` /bash
+``` bash
   oc create secret generic htpass-secret --from-file=htpasswd=users.htpasswd --dry-run=client -o yaml -n openshift-config | oc replace -f -
 ```
 
 -   Si suppression d\'un utilisateur
 
-``` /bash
+``` bash
   oc delete user <username>
   oc delete identity my_htpasswd_provider:<username>
 ```
 
 -   vérifications
 
-``` /bash
+``` bash
   oc get users
   oc get identity
   oc get secrets -n openshift-config
@@ -182,8 +201,10 @@ Ou directement éditer l\'objet cluster
 
 -   On peut aussi directement éditer l\'objet Oauth en mode vi
 
-    oc edit oauth.config.openshift.io/cluster
-    oc edit oauth cluster
+``` bash
+  oc edit oauth.config.openshift.io/cluster
+  oc edit oauth cluster
+```
 
 #### Ajout de droits
 
@@ -191,13 +212,17 @@ Ou directement éditer l\'objet cluster
 
 -   devenir admin d\'un projet et l\'avoir à disposition au login
 
-      oc adm policy add-role-to-user admin <user> -n <project>
-      oc describe rolebinding.rbac -n openshift-config
+``` bash
+  oc adm policy add-role-to-user admin <user> -n <project>
+  oc describe rolebinding.rbac -n openshift-config
+```
 
 -   devenir administrateur global (pour remplacer kubeadmin)
 
-      oc adm policy add-cluster-role-to-user cluster-admin <user> --rolebinding-name=cluster-admin
-      oc describe clusterrolebinding.rbac -n openshift-config
+``` bash
+  oc adm policy add-cluster-role-to-user cluster-admin <user> --rolebinding-name=cluster-admin
+  oc describe clusterrolebinding.rbac -n openshift-config
+```
 
 On peut désormais se connecter avec `oc` tel que décrit ici -
 [](connexion_api)
@@ -206,4 +231,6 @@ Une fois qu\'on a validé que les utilisateurs créés ont les mêmes droits
 que `kubeadmin` avec les droits `cluster-admin`, on peut effacer cet
 utilisateur:
 
-    oc delete secrets kubeadmin -n kube-system
+``` bash
+  oc delete secrets kubeadmin -n kube-system
+```

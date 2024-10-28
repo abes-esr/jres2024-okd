@@ -25,7 +25,7 @@ Les données à manipuler sur le cluster OKD se trouvent dans le namespace
 `openshift-storage`. Pour éviter de préciser le namespace à chaque
 commande `-n openshift-storage`, on rentre dans le projet:
 
-``` /bash
+``` bash
 oc project openshift-storage
 oc project
 ```
@@ -81,7 +81,7 @@ exigences de système distribué de Ceph, et Redhat nous conseille pour un
 fonctionnement correct d\'attribuer au minimum 34GB de RAM pour chacun
 des 3hôtes et 14 vCPUs.
 
-``` /bash
+``` bash
 oc describe -n openshift-storage storageclusters.ocs.openshift.io
 oc get nodes
 *NAME                          STATUS   ROLES                  AGE    VERSION
@@ -97,7 +97,7 @@ orchidee-ccbm8-worker-v55b4   Ready    worker                 454d   v1.25.7+eab
 orchidee-ccbm8-worker-zhgql   Ready    worker                 454d   v1.25.7+eab9cc9
 ```
 
-``` /bash
+``` bash
 oc get -n openshift-storage CephObjectStore
 ```
 
@@ -112,7 +112,7 @@ officiel **s3**.
 
 ### Installation
 
-``` /bash
+``` bash
 curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip" | unzip -
 mv aws /usr/local/bin && chmod aws +x
 ```
@@ -130,13 +130,13 @@ curl \"<https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip>\" -o
 
 -   Non sécurisé
 
-``` /bash
+``` bash
 aws --endpoint http://endpoint <cmd>
 ```
 
 -   Sécurisé sans certificat
 
-``` /bash
+``` bash
 aws --endpoint https://endpoint --no-verify-ssl <cmd> 
 ```
 
@@ -144,11 +144,11 @@ aws --endpoint https://endpoint --no-verify-ssl <cmd>
 
 Récupérer le certificat root:
 
-``` /bash
+``` bash
 oc get -o json secret router-certs-default -n openshift-ingress | jq -r '.data|map_values(@base64d)|to_entries[]|select(.key=="tls.crt").value' > /tmp/ingress.crt
 ```
 
-``` /bash
+``` bash
 aws --endpoint https://endpoint --ca-bundle=/tmp/ingress.crt <cmd>
 # ou bien en exportant la variable
 export AWS_CA_BUNDLE=/tmp/ingress.crt
@@ -158,7 +158,7 @@ export AWS_CA_BUNDLE=/tmp/ingress.crt
 
 -   Création du fichier **credentials**
 
-``` /bash
+``` bash
 cat ~/.aws/credentials
 [admin]
 aws_access_key_id = ''
@@ -167,7 +167,7 @@ aws_secret_access_key = ''
 
 -   Création du fichier **config**
 
-``` /bash
+``` bash
 cat ~/.aws/config
 [profile admin]
 endpoint_url = https://endpoint
@@ -179,7 +179,7 @@ region = Montpellier
 l\'authentification du client auprès des serveurs d\'Amazon. Cependant,
 on peut désactiver cette fonctionnalité en exportant la variable:
 
-``` /bash
+``` bash
 export AWS_EC2_METADATA_DISABLED=true
 ```
 
@@ -206,13 +206,13 @@ Ceph puisque RedHat pousse à l\'utilisation de MCGW pour le cloud
 hybride. Pour contrôler le backend ceph, il faut donc activer `radosgw`
 de cette façon:
 
-``` /bash
+``` bash
 oc patch OCSInitialization ocsinit -n openshift-storage --type json --patch  '[{ "op": "replace", "path": "/spec/enableCephTools", "value": true }]'
 ```
 
 L\'exécution se fait donc dans un container auquel on accède ainsi:
 
-``` /bash
+``` bash
 oc rsh -n openshift-storage $(oc get pod -n openshift-storage -l app=rook-ceph-tools -o jsonpath='{.items[0].metadata.name}')
 # ou bien:
 oc -n openshift-storage rsh $(oc get pods -n openshift-storage -l app=rook-ceph-tools -o name)
@@ -221,7 +221,7 @@ oc -n openshift-storage rsh $(oc get pods -n openshift-storage -l app=rook-ceph-
 on peut à partir de là consulter ou créer différentes ressources du
 backend Ceph:
 
-``` /bash
+``` bash
 $ radosgw-admin user create --display-name="Your user" --uid=your-user
 $ radosgw-admin user info --uid your-user
 
@@ -236,7 +236,7 @@ A noter qu\'on peut également (non recommandé) exécuter dans ce
 container la commande `ceph` pour superviser quelques commandes natives
 au cluster.
 
-``` /bash
+``` bash
 sh-4.4$ ceph -s
   cluster:
     id:     b654dd82-706d-4b72-9ba6-c6a70b9c2d1b
@@ -267,7 +267,7 @@ sh-4.4$ ceph -s
 L\'utilisateur `noobaa-ceph-objectstore-userr` est spécialement créé
 pour RGW par ODF.
 
-``` /bash
+``` bash
 radosgw-admin user info --uid noobaa-ceph-objectstore-user | jq '.keys[]'
 {
   "user": "noobaa-ceph-objectstore-user",
@@ -278,7 +278,7 @@ radosgw-admin user info --uid noobaa-ceph-objectstore-user | jq '.keys[]'
 
 ou avec `oc`
 
-``` /bash
+``` bash
 oc get cephobjectstoreusers.ceph.rook.io -n openshift-storage
 NAME                                     PHASE
 noobaa-ceph-objectstore-user             Ready
@@ -293,7 +293,7 @@ par défaut `noobaa-default-backing-store` avec le secret
 -   secret
     **rook-ceph-object-user-ocs-storagecluster-cephobjectstore-noobaa-ceph-objectstore-user**
 
-``` /bash
+``` bash
 oc get -o json secrets rook-ceph-object-user-ocs-storagecluster-cephobjectstore-noobaa-ceph-objectstore-user -n openshift-storage | jq -r '.data|map_values(@base64d)'
 {
   "AccessKey": "",
@@ -304,20 +304,20 @@ oc get -o json secrets rook-ceph-object-user-ocs-storagecluster-cephobjectstore-
 
 -   Bucket **nb.1683297491248.apps.orchidee.okd-dev.abes.fr**
 
-``` /bash
+``` bash
 oc get -n openshift-storage  backingstores.noobaa.io  -o json noobaa-default-backing-store | jq -r '.spec.s3Compatible.targetBucket'
 ```
 
 -   un service: **rook-ceph-rgw-ocs-storagecluster-cephobjectstore**
 
-``` /bash
+``` bash
 oc  get svc -n openshift-storage
 ```
 
 -   une route:
     **ocs-storagecluster-cephobjectstore-openshift-storage.apps.orchidee.okd-dev.abes.fr**
 
-``` /bash
+``` bash
 oc get route -n openshift-storage
 NAME                                 HOST/PORT                                                                            PATH   SERVICES                                           PORT         TERMINATION          WILDCARD
 ocs-storagecluster-cephobjectstore   ocs-storagecluster-cephobjectstore-openshift-storage.apps.orchidee.okd-dev.abes.fr          rook-ceph-rgw-ocs-storagecluster-cephobjectstore   <all>                             None
@@ -328,13 +328,13 @@ confguration de `aws`
 
 -   une storageClass **ocs-storagecluster-ceph-rgw**
 
-``` /bash
+``` bash
 oc get sc
 ```
 
 -   Un objectStore **ocs-storagecluster-cephobjectstore**
 
-``` /bash
+``` bash
 oc get cephobjectstores.ceph.rook.io  -n openshift-storage
 NAME                                 PHASE
 ocs-storagecluster-cephobjectstore   Connected
@@ -344,7 +344,7 @@ ocs-storagecluster-cephobjectstore   Connected
 
 -   fichier de credentials
 
-``` /bash
+``` bash
 vi ~/.aws/credentials
 [noobaa-ceph-objectstore-user]
 aws_access_key_id = 
@@ -355,7 +355,7 @@ aws_secret_access_key =
 
 La configuration se fait uniquement en **http** et non en **https**
 
-``` /bash
+``` bash
 vi ~/.aws/config
 [profile noobaa-ceph-objectstore-user]
 endpoint_url = http://ocs-storagecluster-cephobjectstore-openshift-storage.apps.orchidee.okd-dev.abes.fr
@@ -364,7 +364,7 @@ region = Montpellier
 
 #### utilisation cu client aws
 
-``` /bash
+``` bash
 aws s3api list-buckets  --profile noobaa-ceph-objectstore-user 
 {
     "Buckets": [
@@ -398,7 +398,7 @@ La création d\'un utilisateur entraîne la génération d\'une
 **access_key** et d\'une **secret_key** associée. Ce sont les données
 qui seront demandées plus tard pour authentifier le **bucket**.
 
-``` /bash
+``` bash
 radosgw-admin user info --uid  your-user | jq '.keys[]'
 {
   "user": "your-user",
@@ -409,7 +409,7 @@ radosgw-admin user info --uid  your-user | jq '.keys[]'
 
 Pour obtenir tous les mots de passe d\'un coup:
 
-``` /bash
+``` bash
 $ for i in $(radosgw-admin user list | jq -r '.[]'); do echo $i;radosgw-admin user info --uid $i | jq '.keys[]'
 ```
 
@@ -417,7 +417,7 @@ $ for i in $(radosgw-admin user list | jq -r '.[]'); do echo $i;radosgw-admin us
 
 -   Avec le client **aws** ( lié à l\'utilisateur précédemment créé)
 
-``` /bash
+``` bash
 aws s3api create-bucket --bucket your-user --profile your-user
 {
     "Buckets": [
@@ -439,7 +439,7 @@ On peut également créer une nouvelle bucket en créant un
 objectBuketClaimn en s\'appuyant sur la storageClass
 **ocs-storagecluster-ceph-rgw**
 
-``` /bash
+``` bash
 oc apply -f - <<EOF
 apiVersion: objectbucket.io/v1alpha1
 kind: ObjectBucketClaim
@@ -453,13 +453,13 @@ spec:
 EOF
 ```
 
-``` /bash
+``` bash
 oc get obc -n default ceph-bucket 
 NAME          STORAGE-CLASS                 PHASE   AGE
 ceph-bucket   ocs-storagecluster-ceph-rgw   Bound   19h
 ```
 
-``` /bash
+``` bash
 oc get ObjectBucketClaim ceph-bucket -n default -o jsonpath='{.spec.bucketName}'
 oc get ObjectBucketClaim ceph-bucket -n default -o json | jq -r '.spec.bucketName'
 ceph-bucket-6088e63f-00d6-4d73-9067-616ef1243624
@@ -479,14 +479,14 @@ Si le nom contient **noobaa** fait partie de ce nom, c\'est simplement
 que le backingStore a été créé au moyen de la commande noobaa, ce qui
 rend le backingStore géré par **noobaa**
 
-``` /bash
+``` bash
 oc  get backingstores.noobaa.io -n openshift-storage noobaa-default-backing-store -o json | jq '.metadata.labels'
 {
   "app": "noobaa"
 }
 ```
 
-``` /bash
+``` bash
 oc get backingstores.noobaa.io -n openshift-storage
 NAME                           TYPE            PHASE   AGE
 noobaa-default-backing-store   s3-compatible   Ready   398d
@@ -494,7 +494,7 @@ noobaa-default-backing-store   s3-compatible   Ready   398d
 
 et pointe par défaut vers la route interne du RGW (et non la MCG)
 
-``` /bash
+``` bash
 oc  get backingstores.noobaa.io -n openshift-storage noobaa-default-backing-store -o json | jq '.spec'
 {
   "s3Compatible": {
@@ -518,7 +518,7 @@ classique.
 C\'est la raison pour laquelle on ne la retrouve pas lorsqu\'on la
 recherche:
 
-``` /bash
+``` bash
 oc get obc -A -o json | jq -r '.items[].spec.bucketName'
 bucket--26847890-4912-4b6f-8076-f59b49c53f57
 ceph-bucket-6088e63f-00d6-4d73-9067-616ef1243624
@@ -534,7 +534,7 @@ De même la classe associée au backingStore
 **noobaa-default-backing-store** est celle par défaut
 **noobaa-default-bucket-class**
 
-``` /bash
+``` bash
 {
   "placementPolicy": {
     "tiers": [
@@ -577,7 +577,7 @@ Le client utilisé pour configurer et consulter un **backingStore** est
 
 -   Installation de noobaa
 
-``` /bash
+``` bash
 NOOBAA_VERSION=v2.0.10
 curl -Lo noobaa https://github.com/noobaa/noobaa-operator/releases/download/$NOOBAA_VERSION/noobaa-linux-$NOOBAA_VERSION
 chmod +x noobaa
@@ -587,7 +587,7 @@ sudo install noobaa /usr/local/bin/
 **noobaa** permet de recueillir un état du service objet ODF à partir du
 namespace `openshift-storage`
 
-``` /bash
+``` bash
 noobaa status -n openshift-storage
 admin@noobaa.io password : ""
 
@@ -658,7 +658,7 @@ openshift-storage   migstorage   migstorage-588a21b0-edd7-4400-a39b-3508ab083a10
 
 On retrouve les mêmes identifiants S3 générés par ODF avec oc:
 
-``` /bash
+``` bash
 oc get secrets -n openshift-storage noobaa-admin -o json | jq -r '.data|map_values(@base64d)'
 {
   "AWS_ACCESS_KEY_ID": "",
@@ -685,7 +685,7 @@ Dans un premier temps, nous allons créer un bucket qui n\'est pas relié
 
 <https://www.ibm.com/docs/en/storage-fusion/2.6?topic=claim-dynamic-object-bucket>
 
-``` /bash
+``` bash
 oc apply -f - <<EOF
 apiVersion: objectbucket.io/v1alpha1
 kind: ObjectBucketClaim
@@ -702,18 +702,18 @@ EOF
 
 <https://www.ibm.com/docs/en/storage-fusion/2.6?topic=obc-creating-object-bucket-claim-using-command-line-interface>
 
-``` /bash
+``` bash
 noobaa obc create tutu -n openshift-storage
 ```
 
 -   Récupération des objets `bucket` et `secrets` générés
 
-``` /bash
+``` bash
 oc get ObjectBucketClaim tutu -n openshift-storage -o json | jq -r '.spec.bucketName'
 tutu-e50058f9-a891-43a0-b20a-3d757f80d941
 ```
 
-``` /bash
+``` bash
 oc get -n openshift-storage secrets tutu -o json | jq -r '.data|map_values(@base64d)'
 {
   "AWS_ACCESS_KEY_ID": "",
@@ -721,7 +721,7 @@ oc get -n openshift-storage secrets tutu -o json | jq -r '.data|map_values(@base
 }
 ```
 
-``` /bash
+``` bash
 noobaa obc status tutu -n openshift-storage
 
 ObjectBucketClaim info:
@@ -762,11 +762,11 @@ Bucket status:
 
 <https://www.ibm.com/docs/en/storage-fusion/2.6?topic=multicloud-creating-s3-compatible-object-gateway-backingstore>
 
-``` /bash
+``` bash
 noobaa backingstore create s3-compatible tutu --access-key='' --secret-key='' --target-bucket tutu-e50058f9-a891-43a0-b20a-3d757f80d941 -n openshift-storage
 ```
 
-``` /bash
+``` bash
 oc apply -f - <<EOF
 apiVersion: noobaa.io/v1alpha1
 kind: BackingStore
@@ -790,11 +790,11 @@ EOF
 
 <https://www.ibm.com/docs/en/storage-fusion/2.6?topic=mdhmb-creating-bucket-classes-mirror-data-using-mcg-command-line-interface>
 
-``` /bash
+``` bash
 noobaa bucketclass create placement-bucketclass tutu-bucket-class --backingstores=tutu
 ```
 
-``` /bash
+``` bash
 oc apply -f - <<EOF
 apiVersion: noobaa.io/v1alpha1
 kind: BucketClass
@@ -813,7 +813,7 @@ EOF
 
 -   vérification
 
-``` /bash
+``` bash
 noobaa backingstore status tutu  -n openshift-storage
 INFO[0000] ✅ Exists: BackingStore "tutu"                
 INFO[0000] ✅ Exists: Secret "noobaa-account-toto"       
@@ -832,13 +832,13 @@ type: s3-compatible
 
 on obtient la même chose avec `oc`
 
-``` /bash
+``` bash
 oc get -n openshift-storage backingstores.noobaa.io -o json tutu | jq '.spec'
 ```
 
 -   Secret **tutu**
 
-``` /bash
+``` bash
 oc get -n openshift-storage secrets tutu -o json | jq -r '.data|map_values(@base64d)'
 {
   "AWS_ACCESS_KEY_ID": "",
@@ -854,7 +854,7 @@ interne, à savoir, `service.namespace.svc`
 -   targetBucket **tutu-e50058f9-a891-43a0-b20a-3d757f80d941**
 -   un service **s3**
 
-``` /bash
+``` bash
 oc get svc -n openshift-storage
 NAME                                               TYPE           CLUSTER-IP       EXTERNAL-IP   PORT(S)                                                    AGE
 TCP,443/TCP                                             388d
@@ -863,7 +863,7 @@ s3                                                 LoadBalancer   172.30.239.146
 
 -   une route **s3-openshift-storage.apps.orchidee.okd-dev.abes.fr**
 
-``` /bash
+``` bash
 oc get route -n openshift-storage
 NAME    HOST/PORT      PATH   SERVICES     PORT         TERMINATION          WILDCARD
 s3     s3-openshift-storage.apps.orchidee.okd-dev.abes.fr     s3          s3-https 
@@ -873,13 +873,13 @@ s3     s3-openshift-storage.apps.orchidee.okd-dev.abes.fr     s3          s3-htt
 
 -   On récupère toutes les informations de connexion via
 
-``` /bash
+``` bash
 noobaa obc status tutu -n openshift-storage
 </code
 
   * Sans certificat
 
-<code /bash>
+<code bash>
 aws --endpoint https://s3-openshift-storage.apps.orchidee.okd-dev.abes.fr --no-verify-ssl
 ```
 
@@ -889,13 +889,13 @@ aws --endpoint https://s3-openshift-storage.apps.orchidee.okd-dev.abes.fr --no-v
 
 -   Non sécurisé
 
-``` /bash
+``` bash
 aws --endpoint http://endpoint <cmd>
 ```
 
 -   Sécurisé sans certificat
 
-``` /bash
+``` bash
 aws --endpoint https://s3-openshift-storage.apps.orchidee.okd-dev.abes.fr --no-verify-ssl <cmd> 
 ```
 
@@ -903,11 +903,11 @@ aws --endpoint https://s3-openshift-storage.apps.orchidee.okd-dev.abes.fr --no-v
 
 Récupérer le certificat root:
 
-``` /bash
+``` bash
 oc get -o json secret router-certs-default -n openshift-ingress | jq -r '.data|map_values(@base64d)|to_entries[]|select(.key=="tls.crt").value' > /tmp/ingress.crt
 ```
 
-``` /bash
+``` bash
 aws --endpoint https://s3-openshift-storage.apps.orchidee.okd-dev.abes.fr --ca-bundle=/tmp/ingress.crt <cmd>
 # ou bien en exportant la variable
 export AWS_CA_BUNDLE=/tmp/ingress.crt
@@ -917,7 +917,7 @@ export AWS_CA_BUNDLE=/tmp/ingress.crt
 
 -   Création du fichier **credentials**
 
-``` /bash
+``` bash
 cat ~/.aws/credentials
 [admin]
 aws_access_key_id = ""
@@ -926,7 +926,7 @@ aws_secret_access_key = ""
 
 -   Création du fichier **config**
 
-``` /bash
+``` bash
 cat ~/.aws/config
 [profile admin]
 endpoint_url = https://s3-openshift-storage.apps.orchidee.okd-dev.abes.fr
@@ -934,7 +934,7 @@ ca_bundle = /tmp/ingress.crt
 region = Montpellier
 ```
 
-``` /bash
+``` bash
 aws --ca-bundle=/tmp/ingress.crt s3api list-buckets --endpoint https://s3-openshift-storage.apps.orchidee.okd-dev.abes.fr --profile admin 
 # ou bien en exportant la variable
 export AWS_CA_BUNDLE=/tmp/ingress.crt
@@ -948,7 +948,7 @@ objectBucketClaim à qui on va attribuer cette classe.
 
 -   Création ou mise à jour de la classe:
 
-``` /bash
+``` bash
 noobaa backingstore list -n openshift-storage
 NAME                           TYPE            TARGET-BUCKET                                    PHASE   AGE             
 nat                            s3-compatible   nat-cf3a745b-ac64-440f-b6e4-02531d6d41b8         Ready   1d4h45m19s      
@@ -957,11 +957,11 @@ test                           s3-compatible   test-c0127d64-b478-43d1-9566-53de
 tutu                           s3-compatible   tutu                                             Ready   10d11h16m24s    
 ```
 
-``` /bash
+``` bash
 noobaa bucketclass create placement-bucketclass mirror --backingstores=test,tutu --placement Mirror
 ```
 
-``` /bash
+``` bash
 oc apply -f <<EOF
 apiVersion: noobaa.io/v1alpha1
 kind: BucketClass
@@ -981,24 +981,24 @@ spec:
 
 -   Création de l\'obc avec la bucketClass
 
-``` /bash
+``` bash
 noobaa obc create  mirrored-bucket --bucketclass=mirror
 ```
 
-``` /bash
+``` bash
 oc get obc/tutu -n openshift-storage -o json | jq  '.spec+={"additionalConfig":{"bucketclass":"mirror"}}'
 ```
 
 -   Test d\'écriture
 
-``` /bash
+``` bash
 oc get ObjectBucketClaim mirror -n openshift-storage -o json | jq -r '.spec.bucketName'
 mirror-38ba3f67-32c5-4b3f-a2b7-175f6f5ea050
 ```
 
 On uploade un fichier sur la bucket qu\'on vient de créer:
 
-``` /bash
+``` bash
 export AWS_ACCESS_KEY_ID=""; export AWS_SECRET_ACCESS_KEY=""; aws s3 cp tito s3://mirror-38ba3f67-32c5-4b3f-a2b7-175f6f5ea050/ --endpoint https://s3-openshift-storage.apps.orchidee.okd-dev.abes.fr
 ```
 
@@ -1022,7 +1022,7 @@ export AWS_ACCESS_KEY_ID=""; export AWS_SECRET_ACCESS_KEY=""; aws s3 cp tito s3:
 On a vu précédemment que la bucketClass faisait référence à un mirroir
 de deux backingStorage `tutu` et `test`
 
-``` /bash
+``` bash
 oc get bucketclasses.noobaa.io -n openshift-storage ezfc -o json | jq '.spec'
 noobaa -n openshift-storage bucketclass status mirrored-bucket
 INFO[0000] ✅ Exists: BucketClass "ezfc"                 
@@ -1039,7 +1039,7 @@ placementPolicy:
 
 On va vérifier que le même objet ya été créé dans les deux buckets:
 
-``` /bash
+``` bash
 export AWS_ACCESS_KEY_ID=""; export AWS_SECRET_ACCESS_KEY=""; aws s3 ls --recursive s3://nat-cf3a745b-ac64-440f-b6e4-02531d6d41b8 --endpoint https://s3-openshift-storage.apps.orchidee.okd-dev.abes.fr
 2024-06-07 13:42:15      97478 noobaa_blocks/6661ef5484b58f0029bcfda5/blocks_tree/0fd.blocks/6662f2170ca8bd000d9970fd
 2024-06-07 15:08:23      97478 noobaa_blocks/6661ef5484b58f0029bcfda5/blocks_tree/158.blocks/666306470ca8bd000d997158
@@ -1047,7 +1047,7 @@ export AWS_ACCESS_KEY_ID=""; export AWS_SECRET_ACCESS_KEY=""; aws s3 ls --recurs
 2024-06-07 16:56:32         36 noobaa_blocks/6661ef5484b58f0029bcfda5/usage
 ```
 
-``` /bash
+``` bash
 export AWS_ACCESS_KEY_ID=""; export AWS_SECRET_ACCESS_KEY=""; aws s3api list-object-versions --bucket nat-cf3a745b-ac64-440f-b6e4-02531d6d41b8 --endpoint https://s3-openshift-storage.apps.orchidee.okd-dev.abes.fr
 {
     "Versions": [
@@ -1110,7 +1110,7 @@ export AWS_ACCESS_KEY_ID=""; export AWS_SECRET_ACCESS_KEY=""; aws s3api list-obj
 
 -   Taille de ma bucket
 
-``` /bash
+``` bash
 export AWS_ACCESS_KEY_ID=""; export AWS_SECRET_ACCESS_KEY=""; aws s3api list-objects --bucket tutu2-3e90e44e-a940-454e-a891-587d13472302 --endpoint http://ocs-storagecluster-cephobjectstore-openshift-storage.apps.orchidee.okd-dev.abes.fr | jq '[.Contents[].Size]|add|./(1024*1024*1024)' 
 2.240389700047672
 #ou bien
@@ -1139,7 +1139,7 @@ configurer, ni de `backingStore`.
 Il s\'appuie sur le la `storageClass` `ocs-storagecluster-ceph-rgw` qui
 est définie à l\'installation d\'ODF.
 
-``` /bash
+``` bash
 oc apply -f - <<EOF
 apiVersion: objectbucket.io/v1alpha1
 kind: ObjectBucketClaim
@@ -1157,7 +1157,7 @@ Le résultat est en deux parties:
 
 l\'objectBucketClaim:
 
-``` /bash
+``` bash
 oc get obc -n default ceph-bucket 
 NAME          STORAGE-CLASS                 PHASE   AGE
 ceph-bucket   ocs-storagecluster-ceph-rgw   Bound   19h
@@ -1165,13 +1165,13 @@ ceph-bucket   ocs-storagecluster-ceph-rgw   Bound   19h
 
 le secret pour y accéder:
 
-``` /bash
+``` bash
 oc get secrets -n default ceph-bucket
 NAME          TYPE     DATA   AGE
 ceph-bucket   Opaque   2      27d
 ```
 
-``` /bash
+``` bash
 oc extract secrets/ceph-bucket -n default --to=-
 # AWS_ACCESS_KEY_ID
 ""
@@ -1186,7 +1186,7 @@ pouvoir étendre l\'objet bucket sur deux modes différents: `spread` et
 `noobaa-default-bucket-class`. Cette bucketClass n\'est ni `spread` ni
 `mirror`
 
-``` /bash
+``` bash
 oc apply -f <<EOF
 apiVersion: noobaa.io/v1alpha1
 kind: BucketClass
@@ -1206,7 +1206,7 @@ La `bucketClass` s\'appuit elle-même sur différents `backingStore` qui
 doivent être définis au préalable. Le backingStore par défaut est
 `noobaa-default-backing-store`
 
-``` /bash
+``` bash
 oc apply -f - <<EOF 
 apiVersion: noobaa.io/v1alpha1
 kind: BackingStore
@@ -1232,7 +1232,7 @@ EOF
 Le MCG s\'appuie sur la `storageClass` `openshift-storage.noobaa.io` qui
 est définie à l\'installation de ODF.
 
-``` /bash
+``` bash
 oc apply -f - <<EOF 
 apiVersion: objectbucket.io/v1alpha1
 kind: ObjectBucketClaim
@@ -1250,7 +1250,7 @@ EOF
 
 La partie
 
-``` /bash
+``` bash
 spec:
   additionalConfig:
     bucketclass: nooba-default-bucket-class
@@ -1265,7 +1265,7 @@ préalablement définie qui elle-même fait appel à différents
 
 Pour renseigner un mode (Spread ou Mirror), il faut rajouter
 
-``` /bash
+``` bash
  oc get bucketclasses.noobaa.io  -n openshift-storage noobaa-default-bucket-class -o json | jq '.spec.placementPolicy.tiers[]+={"placement": "Spread"}'
 ```
 
@@ -1282,7 +1282,7 @@ Pour renseigner un mode (Spread ou Mirror), il faut rajouter
     défaut `noobaa-default-backing-store`, qui pointe lui-même vers le
     RGW installé par défaut par ODF.
 
-``` /bash
+``` bash
 noobaa obc create tutu -n openshift-storage
 noobaa obc status tutu -n openshift-storage
 ```
@@ -1290,21 +1290,21 @@ noobaa obc status tutu -n openshift-storage
 -   On récupère les accès précédemment créés et donnés par
     `noobaa obc status`
 
-``` /bash
+``` bash
 noobaa backingstore create s3-compatible tutu --access-key="" --secret-key="" --target-bucket tutu-e50058f9-a891-43a0-b20a-3d757f80d941 -n openshift-storage
 ```
 
 -   On peut créer des `bucketClass` en combinant différents
     `backingstore`
 
-``` /bash
+``` bash
 noobaa bucketclass create placement-bucketclass tutu-bucket-class --placement=Mirror --backingstores=nat,noobaa-default-backing-store,test -n openshift-storage
 ```
 
 -   On peut maintenant créer des buckets plus complexes à partir de ces
     nouvelles bucketclass
 
-``` /bash
+``` bash
 noobaa obc create  mirrored-bucket --bucketclass=tutu-bucket-class
 ```
 
@@ -1337,7 +1337,7 @@ bucket.
 
 #### secret
 
-``` /bash
+``` bash
 oc extract secrets/ceph-bucket -n default --to=-
 # AWS_ACCESS_KEY_ID
 ""
@@ -1347,7 +1347,7 @@ oc extract secrets/ceph-bucket -n default --to=-
 
 #### configMap
 
-``` /bash
+``` bash
 oc get cm -n movies-docker-ceph movies-docker-ceph -oyaml | oc neat
 apiVersion: v1
 data:
@@ -1368,7 +1368,7 @@ metadata:
 
 Grâce à la directive `envFrom`
 
-``` /bash
+``` bash
 apiVersion: v1
 kind: Pod
 metadata:

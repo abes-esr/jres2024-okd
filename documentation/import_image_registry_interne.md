@@ -43,7 +43,7 @@ l\'extérieur n\'est pas active.
 <https://docs.openshift.com/container-platform/4.13/registry/securing-exposing-registry.html>
 Il faut donc l\'activer:
 
-``` /bash
+``` bash
 oc patch configs.imageregistry.operator.openshift.io/cluster --patch '{"spec":{"defaultRoute":true}}' --type=merge
 ```
 
@@ -51,13 +51,15 @@ oc patch configs.imageregistry.operator.openshift.io/cluster --patch '{"spec":{"
     d\'extraire le l\'url d\'accès au registry
     `default-route-openshift-image-registry.apps.v212.abes.fr`)
 
-    HOST=$(oc get route default-route -n openshift-image-registry --template='{{ .spec.host }}')
-    HOST=$(oc get route default-route -n openshift-image-registry -ojsonpath={.spec.host})
-    HOST=$(oc get route default-route -n openshift-image-registry -o json | jq -r .spec.host)
+``` bash
+HOST=$(oc get route default-route -n openshift-image-registry --template='{{ .spec.host }}')
+HOST=$(oc get route default-route -n openshift-image-registry -ojsonpath={.spec.host})
+HOST=$(oc get route default-route -n openshift-image-registry -o json | jq -r .spec.host)
+```
 
 -   importer une image dans le registry de podman
 
-``` /bash
+``` bash
 podman pull alpine
 podman images
 ```
@@ -74,13 +76,13 @@ registry
 
 -   Connexion de podman au registry sans TLS
 
-``` /bash
+``` bash
 podman login -u $(oc whoami) -p $(oc whoami -t) --tls-verify=false $HOST 
 ```
 
 -   Connexion de podman au registry avec TLS
 
-``` /bash
+``` bash
 mkdir -p /etc/containers/certs.d/${HOST}
 oc get secret -n openshift-ingress  router-certs-default -o go-template='{{index .data "tls.crt"}}' | base64 -d | sudo tee /etc/containers/certs.d/${HOST}/${HOST}.crt  > /dev/null
 podman login -u $(oc whoami) -p $(oc whoami -t) $HOST
@@ -89,13 +91,13 @@ podman login -u $(oc whoami) -p $(oc whoami -t) $HOST
 -   On définit un tag où on va entreposer l\'image dans le registry
     distant
 
-``` /bash
+``` bash
 podman tag docker.io/library/alpine $HOST/openshift/image3
 ```
 
 -   Il ne reste qu\'à pousser l\'image dans ce tag
 
-``` /bash
+``` bash
 podman push (--log-level=debug) $HOST/openshift/image3 (--tls-verify=false)
 ```
 
@@ -122,7 +124,7 @@ On lance le mode debug du container voulu
 
 On rentre dans le chroot du container
 
-``` /bash
+``` bash
 chroot /host
 ```
 
@@ -156,7 +158,7 @@ Par défaut, l\'import se fait avec le tag `latest`. Si on veut importer
 une autre version de l\'image, il faut définir le tag de cette image
 dans le repository:
 
-``` /bash
+``` bash
 oc tag --source=docker docker.io/anapsix/alpine-java:8 alpine-java:8
 oc import-image alpine-java:8 --from=docker.io/anapsix/alpine-java:8 --confirm
 oc get is alpine-java

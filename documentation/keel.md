@@ -55,7 +55,7 @@ Cependant cette fonctionnalité utilisant`ImageStream`, il faut qu\'il en
 existe un au préalable, ce qui n\'est pas le cas par défaut lorsqu\'on
 utlise `kompose` pour créer un deploy.
 
-``` /yaml
+``` yaml
 tee wd-is.yml <<EOF
 apiVersion: image.openshift.io/v1
 kind: ImageStream
@@ -84,7 +84,7 @@ EOF | oc apply -f -
 
 ou bien en CLI
 
-``` /bash
+``` bash
 oc create imagestream theses-api-diffusion
 oc create imagestreamtag theses:develop-api-diffusion --from-image=docker.io/abesesr/theses:develop-api-diffusion (--scheduled=true)
 # ou bien
@@ -102,13 +102,13 @@ Les images sur docker.io peuvent être bloquées par un nombre de
 tentatives sans compte. On peut enlever cette limite en s\'authentifiant
 avec ***REMOVED***
 
-``` /bash
+``` bash
 oc create secret docker-registry docker.io --docker-server=docker.io --docker-username= --docker-password=
 ```
 
 Et on lie le secret au SA default pour puller les images avec ce secret
 
-``` /bash
+``` bash
 oc secrets link default docker.io --for=pull
 oc get sa default -o yaml
 ```
@@ -128,7 +128,7 @@ Dans le cas d\'un deployment non natif à k8s, si on veut que toutes les
 resources kubernetes puissent se référer à un imagestream existant en
 particulier (qualimarc-db-dumper), il faut l\'activer dans le deploy
 
-``` /bash
+``` bash
 oc set image-lookup qualimarc-db-dumper --enabled=true
 oc get is qualimarc-db-dumper
 # renvoie;
@@ -138,13 +138,13 @@ oc get is qualimarc-db-dumper
 
 Vérification:
 
-``` /bash
+``` bash
 oc set image-lookup imagestream --list
 ```
 
 Si on ne veut pas utiliser une ImageStream:
 
-``` /bash
+``` bash
 oc set image-lookup qualimarc-db-dumper --enabled=false
 ```
 
@@ -155,7 +155,7 @@ oc set image-lookup qualimarc-db-dumper --enabled=false
 Si on veut qu\'un deploy en particulier puisse utiliser toutes les
 ImageStreams de son choix:
 
-``` /bash
+``` bash
 oc set image-lookup deploy/mysql
 # renvoie
 spec:
@@ -178,13 +178,13 @@ utiliser un trigger, se présentant sous forme d\'annotation à intégrer
 dans le manifest `Deployment`. **Cela permet de déclencher un nouveau
 deployment de l\'application quand l\'imagestream change.**
 
-``` /bash
+``` bash
 oc set triggers deploy/theses-api-diffusion --from-image=theses-api-diffusion:develop-api-diffusion -c theses-api-diffusion
 ```
 
 Cette commande a pour effet de rajouter la ligne au deploy
 
-``` /yaml
+``` yaml
 ...
 metadata
   annotation:
@@ -202,7 +202,7 @@ une très bonne solution puisqu\'il intègre une interface web.
 d\'OKD**, il faut déployer les applications professionnelles en format
 `Deployment` sans l\'option `--provider openshift` de `kompose`:
 
-``` /bash
+``` bash
 kompose -f docker-compose-resolved.yml convert
 ```
 
@@ -215,7 +215,7 @@ Ce qui aura pour effet de ne pas générer de fichier `ImageStream`
 
 -   On commence par créer l\'environnement propice au projet:
 
-``` /bash
+``` bash
 oc new-project keel
 oc adm policy add-scc-to-user anyuid -z keel
 ```
@@ -223,7 +223,7 @@ oc adm policy add-scc-to-user anyuid -z keel
 -   Les manifests ne sont pas directement fournis, l\'application est
     distribuée sous forme de Helm charts:
 
-``` /bash
+``` bash
 helm repo add keel https://charts.keel.sh
 helm repo update
 helm upgrade --install keel --namespace=keel keel/keel --set helmProvider.enabled="false"
@@ -231,7 +231,7 @@ helm upgrade --install keel --namespace=keel keel/keel --set helmProvider.enable
 
 -   On rajoute un secret docker
 
-``` /bash
+``` bash
 oc create secret docker-registry docker.io --docker-server=docker.io --docker-username= --docker-password=
 oc secrets link keel docker.io --for=pull
 watch -d -n1 oc get pods
@@ -242,13 +242,13 @@ oc get sa default -o yaml
     web. Il faut définir au miminum les variable de login et de mdp pour
     que l\'interface soit disponible:
 
-``` /bash
+``` bash
 oc set env deployment.apps/keel BASIC_AUTH_USER=admin BASIC_AUTH_PASSWORD=password
 ```
 
 -   On peut alors créer un service `clusterip`
 
-``` /bash
+``` bash
 oc create service clusterip keel-ui --tcp 9300:9300
 oc set selector service/keel-ui 'app=keel'
 oc expose service/keel-ui
@@ -260,7 +260,7 @@ oc get route
 Les images à tracker se paramètrent dans leur fichier de déploiement
 `Deployment` au moyen minimum de deux annotations:
 
-``` /yaml
+``` yaml
 ...
   annotations:
     keel.sh/policy: minor # <-- policy name according to https://semver.org/
@@ -269,7 +269,7 @@ Les images à tracker se paramètrent dans leur fichier de déploiement
 
 -   en CLI
 
-``` /bash
+``` bash
 oc annotate deploy/wd keel.sh/policy=force keel.sh/trigger=poll keel.sh/policy=minor
 ```
 

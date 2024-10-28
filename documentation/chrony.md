@@ -1,4 +1,4 @@
-# Configurer le démon chrony dans OKD
+# Configurer le démon chrony avec machineConfig
 
 La configuration de chrony dans OKD va se passer par le biais des
 fichiers ignitions qui sont préchargés on démarrage des nodes du
@@ -10,7 +10,7 @@ ressources suffisantes pour faire tenir l'ensemble des containers sur
 n-1 worker (-1 car 1 worker à la fois se fait redémarrer).
 
 Pour se faire, nous allons passer par Butane qui est un binaire qui nous
-permet de traduire un premier fichier de conf en Objet MachineConfig et
+permet de traduire un premier fichier de conf en Objet "machineConfig" et
 de nous enlever la contrainte d'avoir à choisir la version de ignition
 etc ...
 

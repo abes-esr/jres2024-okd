@@ -11,8 +11,8 @@ le secret en question et on appuie `reveal value`
 On peut faire la même chose avec `oc` (exemple qui suit avec un
 bindPassword)
 
-``` /bash
-  oc get secret ldap-bind-password-676wf -o yaml -n openshift-config -ojsonpath={.data.bindPassword} |base64 -d
+``` bash
+oc get secret ldap-bind-password-676wf -o yaml -n openshift-config -ojsonpath={.data.bindPassword} |base64 -d
 ```
 
 On peut adapter le jsonpath en fonction de la nature du password contenu

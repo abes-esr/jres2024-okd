@@ -30,7 +30,7 @@ Informations sur un group et ses utilisateurs
 On peut importer des groupe existants d\'Active Directory et les
 synchronisant en créant un fichier de connexion yaml
 
-``` /yaml
+``` yaml
 kind: LDAPSyncConfig
 apiVersion: v1
 url: ldap://ldap-win.abes.fr
