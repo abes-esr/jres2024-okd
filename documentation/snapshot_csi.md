@@ -10,7 +10,7 @@ Seuls certains drivers ont la possibilité de d\'effectuer des snapshots
 de volumes. Ce n\'est pas le cas du driver `ovirt-csi` par défaut, mais
 par contre ces drivers supportent cette fonction:
 
-``` /bash
+``` bash
 oc get volumesnapshotclasses.snapshot.storage.k8s.io 
 NAME                                        DRIVER                                  DELETIONPOLICY   AGE
 csi-nfs-snapclass                           nfs.csi.k8s.io                          Delete           22m
@@ -26,7 +26,7 @@ La logique rejoint celle employée par les `storageClass` et les `pv`.
 
 Il faut donc d\'abord définir un `volumeSnapshotClass`
 
-``` /bash
+``` bash
 oc apply -f - <<EOF
 apiVersion: snapshot.storage.k8s.io/v1
 kind: VolumeSnapshotClass
@@ -39,7 +39,7 @@ EOF
 
 Puis on définit un pvc qui crée un `volumeSnapshot`
 
-``` /bash
+``` bash
 oc apply -f - <<EOF
 apiVersion: snapshot.storage.k8s.io/v1
 kind: VolumeSnapshot
@@ -54,19 +54,19 @@ EOF
 
 On vérifie que le snapshot s\'est bien effectué:
 
-``` /bash
+``` bash
 oc get vsc
 NAME                                               READYTOUSE   RESTORESIZE   DELETIONPOLICY   DRIVER           VOLUMESNAPSHOTCLASS   VOLUMESNAPSHOT      VOLUMESNAPSHOTNAMESPACE   AGE
 snapcontent-f0f75a60-c647-4a68-96d7-9af2a0f0882f   true         33989110      Delete           nfs.csi.k8s.io   csi-nfs-snapclass     test-nfs-snapshot   movies-docker-ceph        20h
 ```
 
-``` /bash
+``` bash
 oc get vs
 NAME                READYTOUSE   SOURCEPVC                      SOURCESNAPSHOTCONTENT   RESTORESIZE   SNAPSHOTCLASS       SNAPSHOTCONTENT                                    CREATIONTIME   AGE
 test-nfs-snapshot   true         movies-wikibase-mysql-claim6                           33989110      csi-nfs-snapclass   snapcontent-f0f75a60-c647-4a68-96d7-9af2a0f0882f   20h            20h
 ```
 
-``` /bash
+``` bash
 oc describe volumesnapshot test-nfs-snapshot
 Name:         test-nfs-snapshot
 Namespace:    movies-docker-ceph
@@ -142,7 +142,7 @@ Events:
 
 Le snapshot apparaît bien au niveau du filesystem du NAS:
 
-``` /bash
+``` bash
 [root@methana pool_SAS_2]# ll OKD2/snapshot-f0f75a60-c647-4a68-96d7-9af2a0f0882f/pvc-48d777ae-dde9-4c27-85c6-4390a13b26fe.tar.gz  -h
 -rw-r--r--. 1 nobody nobody 33M May 13 19:45 OKD2/snapshot-f0f75a60-c647-4a68-96d7-9af2a0f0882f/pvc-48d777ae-dde9-4c27-85c6-4390a13b26fe.tar.gz
 ```

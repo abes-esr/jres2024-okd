@@ -5,7 +5,7 @@
 Openshift/OKD, contrairement à une stack kubernetes standard, intègre un
 registry d\'image prêt à l\'emploi déployé sous forme d\'opérateur:
 
-``` /bash
+``` bash
 oc get all -n openshift-image-registry
 NAME                                                   READY   STATUS      RESTARTS      AGE
 pod/cluster-image-registry-operator-7f69b9db5d-245nn   1/1     Running     1 (88d ago)   101d
@@ -76,7 +76,7 @@ On y accède indifféremment avec `docker` ou `podman`.
 Si on n\'utilise pas le superutilisateur `kubeadmin`, il faut ajouter à
 un simple utilisateur certains droits pour accéder au registry:
 
-``` /bash
+``` bash
 oc policy add-role-to-user registry-viewer sblanchet
 oc policy add-role-to-user registry-editor sblanchet
 ```
@@ -89,7 +89,7 @@ utiliser le service interne, il faut se connecter alors depuis un
 worker. On peut considérer cette façon de faire comme un mode dépannage
 rapide, en négligeant le support du TLS.
 
-``` /bash
+``` bash
 oc debug nodes/v212-t4k2k-worker-0-dgjzp
 chroot /host
 oc login https://api.orchidee.okd-dev.abes.fr:6443 -u sblanchet -n <project_name>
@@ -107,7 +107,7 @@ Par défaut, le service `image-registry` n\'est pas exposé pour un accès
 (<https://docs.openshift.com/container-platform/4.13/registry/securing-exposing-registry.html>
 ):
 
-``` /bash
+``` bash
 oc login https://api.orchidee.okd-dev.abes.fr:6443 -u kubeadmin -n <project_name>
 oc patch configs.imageregistry.operator.openshift.io/cluster --patch '{"spec":{"defaultRoute":true}}' --type=merge
 
@@ -120,7 +120,7 @@ HOST=$(oc get route default-route -n openshift-image-registry -o json | jq -r .s
 
 On peut alors s\'y connecter simplement (sans TLS) ainsi;
 
-``` /bash
+``` bash
 podman login -u $(oc whoami) -p $(oc whoami -t) default-route-openshift-image-registry.apps.orchidee.okd-dev.abes.fr --tls-verify=false
 Login Succeeded!
 ```
@@ -136,19 +136,19 @@ appelée, ici
 
 -   podman
 
-``` /bash
+``` bash
 mkdir -p /etc/containers/certs.d/${HOST}
 ```
 
 -   docker
 
-``` /bash
+``` bash
 mkdir -p /etc/docker/certs.d/${HOST}
 ```
 
 #### récupération du certificat root du routeur ingress
 
-``` /bash
+``` bash
 oc get secret -n openshift-ingress  router-certs-default -o go-template='{{index .data "tls.crt"}}' | base64 -d | sudo tee /etc/containers/certs.d/${HOST}/${HOST}.crt  > /dev/null
 # ou bien 
 oc extract secret/router-certs-default -n openshift-ingress --to=/etc/containers/certs.d/$HOST/
@@ -159,7 +159,7 @@ oc extract secret/router-certs-default -n openshift-ingress --to=/etc/docker/cer
 
 #### Connexion
 
-``` /bash
+``` bash
 podman login -u $(oc whoami) -p $(oc whoami -t) $HOST
 docker login -u $(oc whoami) -p $(oc whoami -t) $HOST
 ```
@@ -170,7 +170,7 @@ particulier:
 
 -   podman
 
-``` /bash
+``` bash
 podman login default-route-openshift-image-registry.apps.orchidee.okd-dev.abes.fr --tls-verify --cert-dir /etc/containers/certs.d/
 ```
 
@@ -179,7 +179,7 @@ podman login default-route-openshift-image-registry.apps.orchidee.okd-dev.abes.f
 Il faut d\'abord rajouter le certificat ca dans /etc/ssl/certs en
 changeant l\'option `pem` par l\'extension `crt`
 
-``` /bash
+``` bash
 cd /etc/ssl/certs
 oc get secret -n openshift-ingress  router-certs-default -o go-template='{{index .data "tls.crt"}}' | base64 -d | sudo tee ${HOST}.crt  > /dev/null
 mv apps-orchidee-okd-dev-abes-fr.pem apps-orchidee-okd-dev-abes-fr.crt
@@ -205,7 +205,7 @@ l\'installation de l\'opérateur.
 
 ### Vérification
 
-``` /bash
+``` bash
 oc get all -n quay-registry 
 NAME                                                 READY   STATUS      RESTARTS   AGE
 pod/first-registry-clair-app-7c4bb8758c-brsjj        1/1     Running     0          3d1h
@@ -270,13 +270,13 @@ route.route.openshift.io/first-registry-quay-builder   first-registry-quay-build
 
 Cette fois, la route du registry quay ainsi crée est donc:
 
-``` /bash
+``` bash
 HOST=first-registry-quay-quay-registry.apps.orchidee.okd-dev.abes.fr
 ```
 
 Configuration du registry par défaut:
 
-``` /bash
+``` bash
 oc get -n quay-registry quayregistries.quay.redhat.com -o yaml
 apiVersion: v1
 items:
@@ -327,7 +327,7 @@ quay qui est `config.yaml`. Celui par défaut a été directement généré
 par l\'opérateur avec des valeurs par défaut et mis sous la forme de
 `secrets`
 
-``` /bash
+``` bash
 oc extract secrets/first-registry-config-bundle-wql84 -n quay-registry --to=-
 # config.yaml
 ALLOW_PULLS_WITHOUT_STRICT_LOGGING: false
@@ -353,7 +353,7 @@ BROWSER_API_CALLS_XHR_ONLY: false
 Pour modifier ces options, le plus simple est de passer par l\'UI.
 Sinon, il faut créer un fichier `config.yaml` avec ces options en clair.
 
-``` /bash
+``` bash
 touch config.yaml
 ----
 BROWSER_API_CALLS_XHR_ONLY: true
@@ -362,7 +362,7 @@ BROWSER_API_CALLS_XHR_ONLY: true
 
 et générer le secret à partir du fichier:
 
-``` /bash
+``` bash
 oc create secret generic --from-file config.yaml=./config.yaml first-registry-config-bundle-wql84
 ```
 
@@ -373,7 +373,7 @@ Le paramètre `BROWSER_API_CALLS_XHR_ONLY: false` permet d\'indiquer
 qu\'on peut consulter l\'API depuis l\'extérieur, notamment avec swagger
 ou depuis un navigateur:
 
-``` /bash
+``` bash
 sudo podman run -p 8888:8080 -e API_URL=https://$SERVER_HOSTNAME:8443/api/v1/discovery docker.io/swaggerapi/swagger-ui
 ```
 
@@ -388,13 +388,13 @@ Nous allons de plus en profiter pour créer l\'utilisateur admin
 `quayadmin` déclaré avec à l\'initialisation grâce à l\'option
 `SUPER_USERS`.
 
-``` /bash
+``` bash
 curl -X POST -k https://first-registry-quay-quay-registry.apps.orchidee.okd-dev.abes.fr/api/v1/user/initialize --header 'Content-Type: application/json' --data '{ "username": "quayadmin2", "password":"", "email": "quayadmin2@example.com", "access_token": true}'
 ```
 
 On peut alors se connecter à l\'api avec ce superuser
 
-``` /bash
+``` bash
 sudo podman login -u quayadmin -p "" https://first-registry-quay-quay-registry.apps.orchidee.okd-dev.abes.fr --tls-verify=false
 sudo docker login -u quayadmin -p "" https://first-registry-quay-quay-registry.apps.orchidee.okd-dev.abes.fr --tls-verify=false
 ```
@@ -405,7 +405,7 @@ certificat CA du routeur ingress et le copier avec l\'extension `crt`
 dans
 `/etc/docker/certs.d/first-registry-quay-quay-registry.apps.orchidee.okd-dev.abes.fr/`
 
-``` /bash
+``` bash
 oc extract secret/router-certs-default -n openshift-ingress --to=/etc/containers/certs.d/first-registry-quay-quay-registry.apps.orchidee.okd-dev.abes.fr/
 oc extract secret/router-certs-default -n openshift-ingress --to=/etc/docker/certs.d/first-registry-quay-quay-registry.apps.orchidee.okd-dev.abes.fr/
 ```
@@ -428,7 +428,7 @@ dans le registry OKD
 
 **On liste l\'image contenue dans le registry docker local**
 
-``` /bash
+``` bash
 docker images
 ...
 registry.gitlab.com/nfdi4culture/ta1-data-enrichment/openrefine-wikibase  1.1.0 2512c8cf3084   11 months ago   284MB
@@ -437,20 +437,20 @@ registry.gitlab.com/nfdi4culture/ta1-data-enrichment/openrefine-wikibase  1.1.0 
 
 **On crée une imageStream correspondante**
 
-``` /bash
+``` bash
 oc create is openrefine-wikibase
 ```
 
 **On tague l\'image docker avec la syntaxe
 \<registry_address\>/namespace/\<is_name\>**
 
-``` /bash
+``` bash
 docker tag  registry.gitlab.com/nfdi4culture/ta1-data-enrichment/openrefine-wikibase:1.1.0 default-route-openshift-image-registry.apps.orchidee.okd-dev.abes.fr/movies-docker-beta/openrefine-wikibase
 ```
 
 **On pousse l\'image précédemment taguée dans okd**
 
-``` /bash
+``` bash
 docker push default-route-openshift-image-registry.apps.orchidee.okd-dev.abes.fr/movies-docker-beta/openrefine-wikibase
 ```
 
@@ -474,7 +474,7 @@ docker login -u quayadmin first-registry-quay-quay-registry.apps.orchidee.okd-de
 
 #### Démarrage d\'un container
 
-``` /bash
+``` bash
 docker run busybox echo "fun" > newfile
 docker ps -l
 CONTAINER ID        IMAGE               COMMAND             CREATED
@@ -488,19 +488,19 @@ la modifier, et de commiter cette modification en local en lui
 attribuant un tag qui aura la forme `<registry>/<user>/<repository>` du
 registry distant.
 
-``` /bash
+``` bash
 docker commit 07f2065197ef first-registry-quay-quay-registry.apps.orchidee.okd-dev.abes.fr/quayadmin/myfirstrepo
 ```
 
 On aurait pu uniquement taguer cette image sans la modifier de la façon
 suivante
 
-``` /bash
+``` bash
 docker tag busybox:latest $HOST/quayadmin/myfirstrepo
 ```
 
 #### Push the image to Red Hat Quay
 
-``` /bash
+``` bash
 docker push first-registry-quay-quay-registry.apps.orchidee.okd-dev.abes.fr/quayadmin/myfirstrepo
 ```

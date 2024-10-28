@@ -44,14 +44,14 @@ Nous allons potentiellement utiliser le partage sur 4 NAS:
 
 et partager chacun des volumes de ces NAS.
 
-``` /bash
+``` bash
 cat /etc/exports
 /pool_SAS_1 10.35.0.0/16(rw,root_squash) 10.34.102.0/23(rw,root_squash)
 /pool_SAS_2 10.35.0.0/16(rw,root_squash) 10.34.102.0/23(rw,root_squash)
 /pool_SSD_1 10.35.0.0/16(rw,root_squash) 10.34.102.0/23(rw,root_squash)
 ```
 
-``` /bash
+``` bash
 systemctl reload nfs-server
 ```
 
@@ -60,7 +60,7 @@ systemctl reload nfs-server
 La documentation de `oc` prévoit un partage NFS natif en ligne de
 commande
 
-``` /bash
+``` bash
 oc set volume --help
 ...
     -t, --type='':
@@ -73,7 +73,7 @@ supportée.
 Il faut donc passer par la méthode traditionnelle kubernetes qui est la
 création d\'un PV:
 
-``` /bash
+``` bash
 oc apply -f - <<EOF
 apiVersion: v1
 kind: PersistentVolume
@@ -91,7 +91,7 @@ spec:
 EOF
 ```
 
-``` /bash
+``` bash
 oc get pv
 ```
 
@@ -100,7 +100,7 @@ oc get pv
 Une fois que ce `PV` est créé, il reste à définir un `PVC`, qui va
 réserver pour un namespace donné un espace sur ce `PV`
 
-``` /bash
+``` bash
 oc apply -f - <<EOF
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -117,7 +117,7 @@ spec:
 EOF
 ```
 
-``` /bash
+``` bash
 oc get pvc
 ```
 
@@ -125,7 +125,7 @@ oc get pvc
 
 Il reste à attacher ce PVC à la définition d\'un deployment:
 
-``` /bash
+``` bash
 oc set volume deploy/movies-wikibase --add --claim-name=shared --mount-path=/var/www/html --sub-path=movies_data/shared --read-only=true --overwrite
 ```
 
@@ -148,7 +148,7 @@ chemin nécessaire.
 
 On vérifie:
 
-``` /bash
+``` console
 oc rsh container bash
 mount
 methana.v102.abes.fr:/pool_SAS_2/movies_data/shared on /shared type nfs4 (ro,relatime,vers=4.2,rsize=1048576,wsize=1048576,namlen=255,hard,proto=tcp,timeo=600,retrans=2,sec=sys,clientaddr=10.35.212.57,local_lock=none,addr=10.34.103.43)
@@ -156,13 +156,13 @@ methana.v102.abes.fr:/pool_SAS_2/movies_data/shared on /shared type nfs4 (ro,rel
 
 On cherche les pvc qui ont le nom `shared`
 
-``` /bash
+``` bash
 oc get pod -o json | jq -r '.items[]|select(.spec.volumes[]|select(.persistentVolumeClaim.claimName|test("shared"))?).metadata.name
 movies-wikibase-67f674949-957x2
 movies-wikibase-jobrunner-5f9889b6c9-thslv
 ```
 
-``` /bash
+``` bash
 oc get deploy -o json | jq -r '.items[]|select(.spec.template.spec.volumes[]?|select(.persistentVolumeClaim.claimName|test("shared"))?).metadata.name
 movies-wikibase
 movies-wikibase-jobrunner
@@ -172,27 +172,27 @@ movies-wikibase-jobrunner
 
 On peut détacher ces volumes d\'un deployment avec la commande `oc`
 
-``` /bash
+``` bash
 oc set volume deploy/movies-wikibase --remove --name=shared
 ```
 
 Si on veut supprimer le pvc:
 
-``` /bash
+``` bash
 oc delete pvc shared
 ```
 
 Une fois que le pvc est supprimé, il se peut que, le `pv` reste en état
 `released`, ce qui le rend pas réutilisable.
 
-``` /bash
+``` bash
 oc get pv
 methana-sas-1 1Gi RWX Retain Released  movies-docker/shared                                                      
 ```
 
 Pour pouvoir le réutiliser, il faut libérer le bail du pvc:
 
-``` /bash
+``` bash
 oc patch pv applis-qualimarc-prod -p '{"spec":{"claimRef": null}}'
 ```
 
@@ -200,12 +200,12 @@ oc patch pv applis-qualimarc-prod -p '{"spec":{"claimRef": null}}'
 
 Lister les pvs qui sont RWX
 
-``` /bash
+``` bash
 oc get pv -o json | jq -r '.items[]|select(.spec.accessModes[]?|test("Many")).metadata.name'
 ```
 
 Lister les volumes en doublons:
 
-``` /bash
+``` bash
 docker-compose config | yq -o json | jq -r '.services[].volumes[]?.source' |sort | uniq -d
 ```

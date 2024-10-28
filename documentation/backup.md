@@ -19,7 +19,7 @@ alors distinguer deux formes de backup:
 -   L\'ensemble des **cluster operators** doit être en parfait
     fonctionnement
 
-``` /bash
+``` bash
 oc get co
 ```
 
@@ -34,7 +34,7 @@ suivant
 
 ### Procédure
 
-``` /bash
+``` bash
 oc get nodes
 oc debug node/orchidee-7cn9g-master
 chroot /host
@@ -43,7 +43,7 @@ chroot /host
 
 Cela produit les artefacts suivants
 
-``` /bash
+``` bash
 sh-5.2# ls -hl /home/core/assets/backup/
 total 114M
 -rw-------. 1 root root 114M May  3 16:43 snapshot_2023-05-03_164340.db
@@ -52,14 +52,14 @@ total 114M
 
 ou bien en une commande:
 
-``` /bash
+``` bash
 oc get nodes
 oc debug node/orchidee-ccbm8-master-30 -- chroot /host /usr/local/bin/cluster-backup.sh /home/core/assets/backup
 ```
 
 Il reste alors à sauvegarder les artifacts:
 
-``` /bash
+``` bash
 rsync -av core@orchidee-7cn9g-master-1.v102.abes.fr:/home/core/assets/backup backup-v102 --rsync-path="sudo rsync"
 ```
 
@@ -93,7 +93,7 @@ ne sont pas trouvés, étendre la recherche à tous les namespaces.
 
 Il servira à l\'ensemble des commandes CLI des différents logiciels
 
-``` /bash
+``` bash
 oc extract secret/router-certs-default -n openshift-ingress --to=/tmp --keys=tls.crt
 # Pour uniquement l'afficher
 oc extract secret/router-certs-default -n openshift-ingress --to=- --keys=tls.crt
@@ -115,7 +115,7 @@ backup. Il se décompose en 2 parties:
         `SnapshotLocation`
     2.  par le logiciel de snapshot filesystem `Restic`
 
-``` /bash
+``` bash
 wget https://github.com/vmware-tanzu/velero/releases/download/v1.11.0/velero-v1.11.0-linux-amd64.tar.gz | tar xvzf -
 mv velero /usr/local/bin && chmod velero +x
 # Si le choix de l'installation du serveur velero a été fait en mode non sécurisé
@@ -131,7 +131,7 @@ CSI du provider ne supporte pas le snapshot.
 
 Ce mot de passe sera demandé à chaque commande restic
 
-``` /bash
+``` bash
 oc extract secret/velero-restic-credentials -n openshift-adp --to=-
 # ou
 oc get -n openshift-adp secrets velero-restic-credentials -o jsonpath="{.data.repository-password}" | base64 -d
@@ -139,7 +139,7 @@ oc get -n openshift-adp secrets velero-restic-credentials -o jsonpath="{.data.re
 
 ##### Installation
 
-``` /bash
+``` bash
 wget https://github.com/restic/restic/releases/download/v0.15.2/restic_0.15.2_linux_amd64.bz2 -O restic | bzip2 -d -
 mv restic /usr/local/bin && chmod restic +x
 ```
@@ -148,14 +148,14 @@ mv restic /usr/local/bin && chmod restic +x
 
 ##### Installation
 
-``` /bash
+``` bash
 curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip" | unzip -
 mv aws /usr/local/bin && chmod aws +x
 ```
 
 ##### Configuration
 
-``` /bash
+``` bash
 export AWS_CA_BUNDLE=/tmp/okd-dev.der
 alias aws='aws --endpoint https://s3-openshift-storage.apps.orchidee.okd-dev.abes.fr'
 # ou bien en dernier recours si on n a pas récupéré le certificat root du routeur d openshift:
@@ -175,7 +175,7 @@ C\'est la partie qui va physiquement contenir les objets sauvegardés
 **ODF** en a déjà créé un par défaut avec Nooba, sur fond de classe
 RADOS Ceph (RGW)
 
-``` /bash
+``` bash
 oc get backingstores.noobaa.io -n openshift-storage 
 NAME                           TYPE            PHASE   AGE
 noobaa-default-backing-store   s3-compatible   Ready   12d
@@ -187,7 +187,7 @@ nouveaux buckets claim)
 
 #### Création de la Bucket Class
 
-``` /bash
+``` bash
 oc apply -f <<EOF
 apiVersion: noobaa.io/v1alpha1
 kind: BucketClass
@@ -210,7 +210,7 @@ Storage -\> Data Foundation -\> Bucket Class
 
 On vérifie:
 
-``` /bash
+``` bash
 oc -n openshift-storage get bucketclasses.noobaa.io 
 NAME                          PLACEMENT                                                        NAMESPACEPOLICY   QUOTA   PHASE   AGE
 noobaa-default-bucket-class   {"tiers":[{"backingStores":["noobaa-default-backing-store"]}]} 
@@ -218,7 +218,7 @@ noobaa-default-bucket-class   {"tiers":[{"backingStores":["noobaa-default-backin
 
 #### Création de l\'**Object Bucket Claim**
 
-``` /bash
+``` bash
 oc apply -f - <<EOF
 apiVersion: objectbucket.io/v1alpha1
 kind: ObjectBucketClaim
@@ -241,7 +241,7 @@ EOF
 
 On vérifie:
 
-``` /bash
+``` bash
 oc get -n openshift-storage objectbucketclaim migstorage -o yaml
 ```
 
@@ -302,7 +302,7 @@ container se redéploie avec la prise en compte du certificat root.
 
 \* création d\'un fichier `cloud-credentials`
 
-``` /bash
+``` bash
 cat <<EOF > credential-velero && oc create secret generic cloud-credentials2 -n openshift-adp --from-file cloud=credential-velero && rm -f credential-velero
 [default]
 aws_access_key_id=key
@@ -310,7 +310,7 @@ aws_secret_access_key=key
 EOF
 ```
 
-``` /bash
+``` bash
 oc create secret generic cloud-credentials -n openshift-adp --from-file cloud=credentials-velero
 ```
 
@@ -321,11 +321,11 @@ contrairement à ce que la documentation officielle velero indique, il
 n\'est possible de préciser l\'option `--cacert` en cli, mais il est
 quand même possible de renseigner le certificat CA dans la conf velero:
 
-``` /bash
+``` bash
 velero client config set cacert=/tmp/ingress.pem
 ```
 
-``` /bash
+``` bash
 oc apply -f - <<EOF  
 apiVersion: oadp.openshift.io/v1alpha1
 kind: DataProtectionApplication
@@ -370,7 +370,7 @@ EOF
 
 ##### mode sécurisé
 
-``` /bash
+``` bash
 oc apply -f - <<EOF  
 apiVersion: oadp.openshift.io/v1alpha1
 kind: DataProtectionApplication
@@ -420,13 +420,13 @@ Toutes les manipulations se font dans le namespace `openshift-adp` On
 peut cependant configurer velero pour qu\'il prenne en compte ce
 namespace par défaut au lieu de `velero`
 
-``` /bash
+``` bash
 velero client config set namespace=openshift-adp
 cat /home/nblanchet/.config/velero/config.json
 {"namespace":"openshift-adp"}
 ```
 
-``` /bash
+``` bash
 oc get all -n openshift-adp
 NAME                                                    READY   STATUS    RESTARTS   AGE
 pod/openshift-adp-controller-manager-5d47dfd7cc-6gcp2   1/1     Running   0          8d
@@ -459,7 +459,7 @@ replicaset.apps/velero-7dbc47ff6d                             0         0       
 
 On vérifie que la conf est cohérente au niveau des CR
 
-``` /bash
+``` bash
 oc get -n openshift-adp backupstoragelocations.velero.io
 oc get -n openshift-adp backupstoragelocations.velero.io velero-sample-1 -o json | jq '.spec'
 {
@@ -488,14 +488,14 @@ Le client velero se connecte par défaut à l\'environnement k8s défini
 par la variable `$KUBECONFIG`. On peut aussi forcer cet environnement
 avec l\'option `--kubeconfig`
 
-``` /bash
+``` bash
 oc -n openshift-adp exec velero-6984c689f5-x97z2 -- /velero snapshot-location get
 velero backup-location get -n openshift-adp
 NAME              PROVIDER   BUCKET/PREFIX                                            PHASE       LAST VALIDATED                   ACCESS MODE   DEFAULT
 velero-sample-1   aws        migstorage-588a21b0-edd7-4400-a39b-3508ab083a10/velero   Available   2024-05-29 18:55:31 +0200 CEST   ReadWrite     true
 ```
 
-``` /bash
+``` bash
 oc get -n openshift-adp volumesnapshotlocations.velero.io velero-sample-1 -o json | jq '.spec'
 {
   "config": {
@@ -506,7 +506,7 @@ oc get -n openshift-adp volumesnapshotlocations.velero.io velero-sample-1 -o jso
 }
 ```
 
-``` /bash
+``` bash
 oc -n openshift-adp exec velero-6984c689f5-x97z2 -- /velero snapshot-location get
 velero snapshot-location get -n openshift-adp
 NAME              PROVIDER
@@ -522,7 +522,7 @@ Pour rappel, dans cette partie, on n\'utilise uniquement que le mode FSB
 défini dans le CR `dpa`, l\'option `--default-volumes-to-fs-backup` est
 donc inutile mais est là pour mémoire.
 
-``` /bash
+``` bash
 # par sélection de label
 velero backup create movies --selector io.kompose.network/movies-docker-test-default=true -n openshift-adp (--default-volumes-to-fs-backup=true)
 # par namespace
@@ -531,7 +531,7 @@ velero backup create movies --include-namespaces=movies-docker-ceph -n openshift
 
 version sans filtres:
 
-``` /bash
+``` bash
 oc apply -f - <<EOF
 apiVersion: velero.io/v1
 kind: Backup
@@ -554,7 +554,7 @@ EOF
 
 version avec `labelSelector`
 
-``` /bash
+``` bash
 oc apply -f - <<EOF
 apiVersion: velero.io/v1
 kind: Backup
@@ -579,7 +579,7 @@ EOF
 
      * Vérification de l'état de la sauvegarde
 
-``` /bash
+``` bash
 velero backup describe movies -n openshift-adp
 velero backup logs movies -n openshift-adp
 velero backup get movies
@@ -589,7 +589,7 @@ oc get podvolumebackups.velero.io  -n openshift-adp --sort-by='{metadata.creatio
 movies60-vvtff   Completed   8h        movies-docker-ceph   movies-wikibase-wdqs-7f65d75f4d-p6jrp   movies-wikibase-wdqs-claim0    s3:http://ocs-storagecluster-cephobjectstore-openshift-storage.apps.orchidee.okd-dev.abes.fr/tutu2-3e90e44e-a940-454e-a891-587d13472302/velero/restic/movies-docker-ceph   kopia           velero-sample-1    8h
 ```
 
-``` /bash
+``` bash
 velero backup describe movies62 --details
 ...
 Backup Item Operations:
@@ -614,7 +614,7 @@ Backup Item Operations:
 
 -   Vérification du contenu des fichiers
 
-``` /bash
+``` bash
 export AWS_ACCESS_KEY_ID="key"; export AWS_SECRET_ACCESS_KEY="key"; aws s3 ls s3://tutu2-3e90e44e-a940-454e-a891-587d13472302/ --recursive --endpoint http://ocs-storagecluster-cephobjectstore-openshift-storage.apps.orchidee.okd-dev.abes.fr | sort
 2024-06-14 12:58:55    1112117 velero/restic/movies-docker-ceph/data/97/9735f40a7d8778f4af65b5f467de2233e0dcada6f9e01aa446f6e8e2f5c6cc5c
 2024-06-14 12:58:55       1232 velero/restic/movies-docker-ceph/index/4eca95163a14b77e8d766c3c0d8d8f296ae03729e6e431a499523e947dd79e8c
@@ -637,7 +637,7 @@ On distingue bien deux parties;
 
 -   la partie sauvegarde du volume `restic`
 
-``` /bash
+``` bash
 2024-06-14 12:58:55    1112117 velero/restic/movies-docker-ceph/data/97/9735f40a7d8778f4af65b5f467de2233e0dcada6f9e01aa446f6e8e2f5c6cc5c
 2024-06-14 12:58:55       1232 velero/restic/movies-docker-ceph/index/4eca95163a14b77e8d766c3c0d8d8f296ae03729e6e431a499523e947dd79e8c
 2024-06-14 12:58:55      27273 velero/restic/movies-docker-ceph/data/e0/e0e87d85179da5f117392afb92f9ca2e08cb3bdd93cd5a288a7dad1306de1027
@@ -646,7 +646,7 @@ On distingue bien deux parties;
 
 -   La partie sauvegardes des manifests:
 
-``` /bash
+``` bash
 2024-06-14 12:58:56      10941 velero/backups/movies56/movies56-logs.gz
 2024-06-14 12:58:56         27 velero/backups/movies56/movies56-csi-volumesnapshotcontents.json.gz
 2024-06-14 12:58:56         29 velero/backups/movies56/movies56-csi-volumesnapshots.json.gz
@@ -676,7 +676,7 @@ restic, ainsi qu\'un profil de credential différent.
 
 La mise en oeuvre est la même que précédemment:
 
-``` /bash
+``` bash
 oc apply -f - <<EOF  
 apiVersion: oadp.openshift.io/v1alpha1
 kind: DataProtectionApplication
@@ -723,13 +723,13 @@ La sauvegarde se fait alors par snapshot et non plus par fichiers plats.
 On peut cependant désactiver cette fonction soit dans le CR
 `DataProtectionApplication` soit dans le CR `backup` avec:
 
-``` /bash
+``` bash
 ''defaultVolumesToRestic: true''
 ```
 
      * Vérification de l'état de la sauvegarde
 
-``` /bash
+``` bash
 oc get volumesnapshotcontents.snapshot.storage.k8s.io --sort-by='{metadata.creationTimestamp}' -n openshift-adp
 snapcontent-2463af57-dfd2-4a50-8841-42e3e518e8ee   true         0             Retain           openshift-storage.rbd.csi.ceph.com      ocs-storagecluster-rbdplugin-snapclass      name-51e498eb-f8d4-410c-9a0c-7d13e4abc3d7   ns-51e498eb-f8d4-410c-9a0c-7d13e4abc3d7   6h13m
 ```
@@ -739,7 +739,7 @@ cette fois que la sauvegarde des manifests. En effet, les snapshots des
 volumes restent sur l\'environnement k8s d\'origine, dans l\'objet
 `volumesnapshotcontents`
 
-``` /bash
+``` bash
 export AWS_ACCESS_KEY_ID="key"; export AWS_SECRET_ACCESS_KEY="key"; aws s3 ls s3://tutu2-3e90e44e-a940-454e-a891-587d13472302/ --recursive --endpoint http://ocs-storagecluster-cephobjectstore-openshift-storage.apps.orchidee.okd-dev.abes.fr | sort
 2024-06-14 16:13:52      11413 velero/backups/movies62/movies62-logs.gz
 2024-06-14 16:13:54         29 velero/backups/movies62/movies62-podvolumebackups.json.gz
@@ -758,7 +758,7 @@ export AWS_ACCESS_KEY_ID="key"; export AWS_SECRET_ACCESS_KEY="key"; aws s3 ls s3
 
 ##### Mise à jour
 
-``` /bash
+``` bash
 oc get subscriptions.operators.coreos.com -n openshift-adp -o yaml
 oc patch --type='json' subscriptions  redhat-oadp-operator -p '[{"op": "replace", "path": "/spec/channel", "value": 'stable-1.3'}]' -n openshift-adp
 oc get subscriptions.operators.coreos.com -n openshift-adp -o json redhat-oadp-operator | jq '.spec.channel|="stable-1.3"' | oc apply -f -
@@ -785,7 +785,7 @@ sur les même principes que la version 1.1:
           * ''FSB'': ''--default-volumes-to-fs-backup=true''
           * ''CSI'': ''--default-volumes-to-fs-backup=false''
 
-``` /bash
+``` bash
 oc apply -f - <<EOF  
 apiVersion: oadp.openshift.io/v1alpha1
 kind: DataProtectionApplication
@@ -834,14 +834,14 @@ EOF
 
 Puis on peut lancer le backup:
 
-``` /bash
+``` bash
 #FSB
 velero backup create velero-sample --default-volumes-to-fs-backup --include-namespaces=movies-docker-ceph -n openshift-adp
 #CSI
 velero backup create velero-sample --default-volumes-to-fs-backup=false --include-namespaces=movies-docker-ceph -n openshift-adp
 ```
 
-``` /bash
+``` bash
 oc apply -f - <<EOF
 apiVersion: velero.io/v1
 kind: Backup
@@ -864,7 +864,7 @@ EOF
 
 On observe les mêmes résultats:
 
-``` /bash
+``` bash
 oc get podvolumebackups.velero.io  -n openshift-adp --sort-by='{metadata.creationTimestamp}'
 oc get volumesnapshotcontents.snapshot.storage.k8s.io --sort-by='{metadata.creationTimestamp}' -n openshift-adp
 ```
@@ -889,7 +889,7 @@ Pour ce faire, il faut
     `metadata.labels.velero.io/csi-volumesnapshot-class: "true"` est
     bien renseigné:
 
-``` /bash
+``` bash
 oc get volumesnapshotclasses.snapshot.storage.k8s.io 
 NAME                                        DRIVER                                  DELETIONPOLICY   AGE
 csi-nfs-snapclass                           nfs.csi.k8s.io                          Delete           32d
@@ -898,11 +898,11 @@ ocs-storagecluster-rbdplugin-snapclass      openshift-storage.rbd.csi.ceph.com  
 oc label volumesnapshotclasses ocs-storagecluster-cephfsplugin-snapclass velero.io/csi-volumesnapshot-class="true"
 ```
 
-``` /bash
+``` bash
 velero backup create velero-sample --snapshot-move-data --include-namespaces=movies-docker-ceph -n openshift-adp --snapshot-move-data 
 ```
 
-``` /bash
+``` bash
 oc apply -f - <<EOF
 apiVersion: velero.io/v1
 kind: Backup
@@ -927,7 +927,7 @@ EOF
 Vérification des snapshots:
 <https://docs.okd.io/latest/backup_and_restore/application_backup_and_restore/installing/oadp-backup-restore-csi-snapshots.html>
 
-``` /bash
+``` bash
 velero backup describe movies63 --details
 ...
 Backup Item Operations:
@@ -945,7 +945,7 @@ Backup Item Operations:
 ...
 ```
 
-``` /bash
+``` bash
 oc get  datauploads.velero.io  -n openshift-adp movies63-znfb5 -o yaml
 apiVersion: velero.io/v2alpha1
 kind: DataUpload
@@ -994,14 +994,14 @@ status:
 De plus, on voit bien à présent qu\'aucun `volumeSnaphotContents` n\'est
 généré:
 
-``` /bash
+``` bash
 oc get volumesnapshotcontents.snapshot.storage.k8s.io --sort-by='{metadata.creationTimestamp}' -n openshift-adp
 ```
 
 Ce qui confirme bien que les fichiers de snapshots ont bien été
 transférés sur le bucket cible.
 
-``` /bash
+``` bash
 2024-06-14 17:47:21      11273 velero/backups/movies63/movies63-logs.gz
 2024-06-14 17:47:22         29 velero/backups/movies63/movies63-podvolumebackups.json.gz
 2024-06-14 17:47:22         29 velero/backups/movies63/movies63-volumesnapshots.json.gz
@@ -1023,7 +1023,7 @@ transférés sur le bucket cible.
 Contrairement à un backup sans l\'option `Data Mover`, on retrouve bien
 des fichiers de volumes `kopia`.
 
-``` /bash
+``` bash
 oc get -o json datauploads -n openshift-adp | jq '.items[]|{(.metadata.name): {(.spec.sourcePVC): (.spec.csiSnapshot.storageClass)}}' 
 {
   "movies21-27zl7": {

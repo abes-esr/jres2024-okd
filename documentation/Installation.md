@@ -54,7 +54,7 @@ l\'installation échouera sur un timeout.**
 
 Création d\'un fichier de configuration à l\'api d\'ovirt
 
-``` /bash
+``` bash
 tee ~/.ovirt/ovirt-config.yaml <<EOF
 ovirt_url: https://ovirt.example.com/ovirt-engine/api 
 ovirt_fqdn: ovirt.example.com 
@@ -68,14 +68,14 @@ EOF
 On crée un fichier d\'installation dans le but de le modifier avant
 l\'installation.
 
-``` /bash
+``` bash
 $ openshift-install create install-config --log-level=info (--dir okd_install)
 ```
 
 On modifie le fichier en fonction des valeurs `$API` et `$APPS` rentrées
 précédemment.
 
-``` /bash
+``` bash
 yum install -y moreutils
 sudo wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/bin/yq &&  sudo  chmod +x /usr/bin/yq
 CIDR='10.34.212.0/23'; API='10.34.212.49'; APPS='10.34.212.39'
@@ -87,7 +87,7 @@ yq eval -o json install-config.yaml | jq ".networking.cidr = \"$CIDR\"" \
 
 Puis on lance l\'installateur:
 
-``` /bash
+``` bash
 $ openshift-install create cluster --log-level=info (--dir okd_install)
 ```
 
@@ -162,7 +162,7 @@ Il est possible de personnaliser l\'installation:
 Il faut créer pour cela un fichier de configuration
 `install-config.yaml`
 
-``` /bash
+``` bash
 additionalTrustBundlePolicy: Proxyonly
 apiVersion: v1
 baseDomain: okd-prod.abes.fr
