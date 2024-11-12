@@ -31,13 +31,13 @@ automatisation, Github, devops, ODF, Ceph, ingress
 En charge de fournir l'infrastructure nécessaire au développement et à
 la production des applications professionnelles fournies par
 [l'Abes](https://www.abes.fr/), le Service Infrastructure et Réseau
-(SIRE) s\'efforce de mettre à disposition des plateformes modernes en
-adéquation avec les besoins pour le développement et l\'hébergement des
+(SIRE) s'efforce de mettre à disposition des plateformes modernes en
+adéquation avec les besoins pour le développement et l'hébergement des
 solutions informatiques proposées.
 
 Le projet de virtualisation généralisée vers les outils de devops, qui
-s\'appuie sur l\'orchestration des conteneurs à l\'aide
-d\'Openshift/OKD, constitue une illustration de cette démarche.
+s'appuie sur l'orchestration des conteneurs à l'aide
+d'Openshift/OKD, constitue une illustration de cette démarche.
 
 Cet article n'a pas pour ambition de couvrir exhaustivement tous les cas
 d'usage de Kubernetes. Son objectif est plutôt d'offrir un premier
@@ -107,12 +107,12 @@ Ainsi, notre environnement de CI/CD repose principalement sur la paire
 
 Il comporte deux types de *repositories* pour chaque application :
 
--   \<app\>-front et \<app\>-api :
+-   <app>-front et <app>-api :
 
     Ils contiennent le code java et le Dockerfile pour *builder* les
     images.
 
--   \<app\>-docker :\
+-   <app>-docker :
     Il contient le README.md et le docker-compose.yaml nécessaire pour
     lancer l'applicationPour leur part, les GitHubs actions 
     automatisent le *build* et le *versionning* des images à partir des
@@ -125,7 +125,7 @@ qui sont appelées dans le docker-compose.yml.
 
 #### Docker-compose.yml
 
-C'est donc le docker-compose.yaml issu du *repository* \<app\>-docker
+C'est donc le docker-compose.yaml issu du *repository* <app>-docker
 qui est l'élément à analyser pour lancer l'application en question.
 
 Il contient les éléments essentiels suivants sous le format yaml :
@@ -141,7 +141,7 @@ Il contient les éléments essentiels suivants sous le format yaml :
 -   variables d'environnement.
 
 Il s'agit des données suffisantes (mais non exhaustives) pour décrire la
-façon dont le *runtime \[15\]* - ici Docker - exécute l'application, à
+façon dont le *runtime [15]* - ici Docker - exécute l'application, à
 l'aide d'un ou plusieurs containers interagissant les uns avec les
 autres en tant que services unitaires.
 
@@ -150,8 +150,8 @@ autres en tant que services unitaires.
 ## Objectifs
 
 Les objectifs définis dans le cadre de ce POC (*Proof of Concept*)
-étaient de choisir l\'orchestrateur le mieux adapté à nos besoins,
-d\'installer un cluster et de tester l\'import sous Docker des
+étaient de choisir l'orchestrateur le mieux adapté à nos besoins,
+d'installer un cluster et de tester l'import sous Docker des
 applications professionnelles pré-existantes.
 
 ## Choix d'un orchestrateur
@@ -174,11 +174,11 @@ politique informatique de l'Abes, et principalement :
 -   la présence d'une communauté active.
 
     Pour choisir notre orchestrateur, la compatibilité avec l'*Open
-    Container Initiative (OCI) \[12\]* a également été l'un de nos
+    Container Initiative (OCI) [12]* a également été l'un de nos
     critères pour garantir la standardisation de nos applications. C'est
     en effet l'objectif de l'OCI qui décrit des formats d'industrie
-    d'images, de distribution et de *runtime \[15\]* de containers.
-    C'est ainsi que Docker a reversé à l'OCI runC \[14\] son format de
+    d'images, de distribution et de *runtime [15]* de containers.
+    C'est ainsi que Docker a reversé à l'OCI runC [14] son format de
     *runtime* ainsi que son format d'image Docker.
 
 Objectivement, la version Vanilla de Kubernetes offrait déjà bon nombre
@@ -208,14 +208,14 @@ agilité d'exécution donne la possibilité de dimensionner automatiquement
 les ressources (*autoscaling*) soit en ajustant le nombre de *pods*
 (*horizontal scaling*), soit en ajustant les ressources nécessaires au
 *pod* en question (*vertical scaling*). Le *scaling*
-[\[wiki\]](https://github.com/abes-esr/jres2024-okd/blob/main/documentation/scaling.md)
+[[wiki]](https://github.com/abes-esr/jres2024-okd/blob/main/documentation/scaling.md)
 est possible pour les *pods*, les nœuds *master* ou *worker* sur la base
 de *triggers* de déclenchement pré-définis.
 
 ![](files/image2.png)
 *2. Horizontal Autoscaling vs Vertical autoscaling*
 
-## Installation d'OKD \[2\] [\[wiki\]](https://github.com/abes-esr/jres2024-okd/blob/main/documentation/Installation.md)
+## Installation d'OKD [2] [[wiki]](https://github.com/abes-esr/jres2024-okd/blob/main/documentation/Installation.md)
 
 ### Présentation
 
@@ -238,31 +238,31 @@ virtualisation qui n'offre pas de service DNS ou DHCP, ce qui nécessite
 un service en parfait état de marche.
 
 Le DNS joue un rôle crucial et doit être capable de résoudre les
-*wildcards* - « \*apps.orchidee.okd.abes.fr », notamment le point
+*wildcards* - « *apps.orchidee.okd.abes.fr », notamment le point
 d'entrée du cluster « api.orchidee.abes.fr »
 
 De plus, n'offrant pas de service DHCP, il convient de configurer une
 plage d'adresses dynamiques sur un *vlan* dédié à la communication
 *inter-pods*.
-[\[wiki\]](https://github.com/abes-esr/jres2024-okd/blob/main/documentation/Installation.md)
+[[wiki]](https://github.com/abes-esr/jres2024-okd/blob/main/documentation/Installation.md)
 
 ### Installation en mode Installer-provisionned Infractructure (IPI)
 
-Il s\'agit de la façon la plus simple d'installer et de mettre à jour un
+Il s'agit de la façon la plus simple d'installer et de mettre à jour un
 *cluster* OKD puisqu'il installe de manière transparente les VMs de
 *bootstrap*, de *control plane* et des nœuds *worker*. Ce type
-d\'installation ne nécessite pas, comme dans le mode UPI, de fournir des
+d'installation ne nécessite pas, comme dans le mode UPI, de fournir des
 nœuds fonctionnant sous FedoraCoreOS et se configurant au moyen de
 fichiers ignition. Il inclut de plus un *loadbalancer* prêt à l'emploi,
-le *driver* CSI - csi.ovirt.org \[5\] - pour gérer le stockage permanent
+le *driver* CSI - csi.ovirt.org [5] - pour gérer le stockage permanent
 Kubernetes en tant que disques dynamiques oVirt, ainsi que le *scaling*
 et l'*auto-scaling* des nœuds, qu'ils soient de type workers ou masters
 avec une simple
-commande [\[wiki\]](https://github.com/abes-esr/jres2024-okd/blob/main/documentation/scaling.md)
+commande [[wiki]](https://github.com/abes-esr/jres2024-okd/blob/main/documentation/scaling.md)
 :
 
 `
-$ oc scale \--replicas=2 machineset orchidee-hw8b4-worker -n
+$ oc scale --replicas=2 machineset orchidee-hw8b4-worker -n
 openshift-machine-api
 `
 
@@ -270,16 +270,16 @@ Pour débuter l'installation, il faut générer un fichier de configuration
 en se laissant guider :
 
 ```
-$ ./openshift-install create install-config \--log-level=info  
-\--dir=/tmp`
-? Platform \[Use arrows to move, type to filter, ? for more help\]  
+$ ./openshift-install create install-config --log-level=info  
+--dir=/tmp`
+? Platform [Use arrows to move, type to filter, ? for more help]  
 alibabacloud  
 aws  
 azure  
 gcp  
 nutanix  
 openstack
-\> ovirt  
+> ovirt  
 vsphere
 ```
 
@@ -288,7 +288,7 @@ suffit de répondre aux questions de l'installateur et de renseigner deux
 éléments principaux qui vont constituer le socle du *cluster*
 Kubernetes :
 
-? Internal API virtual IP 10.34.212.49\
+? Internal API virtual IP 10.34.212.49
 ? Ingress virtual IP 10.34.212.39
 
 Une fois le fichier install-config.yaml généré, il suffit de lancer
@@ -298,7 +298,7 @@ cette commande :
 $ ./openshift-install create cluster
 `
 
-puis de patienter 40 minutes pour finaliser de l'installation.\
+puis de patienter 40 minutes pour finaliser de l'installation.
 On obtient ainsi un cluster comprenant (par défaut) six nœuds :
 
 -   **3 masters** : il s'agit des 3 VMs essentielles du *cluster,* à
@@ -309,10 +309,10 @@ On obtient ainsi un cluster comprenant (par défaut) six nœuds :
 -   **3 workers** : c'est sur eux que l'orchestrateur lance les *pods*
     applicatifs, mais ils gèrent également tous les services
     *cluster *(API, authentification
-    [\[wiki\]](https://github.com/abes-esr/jres2024-okd/blob/main/documentation/connexion_api.md),
+    [[wiki]](https://github.com/abes-esr/jres2024-okd/blob/main/documentation/connexion_api.md),
     *registry*
-    [\[wiki\],](https://github.com/abes-esr/jres2024-okd/blob/main/documentation/registry.md)
-    etc\...) ainsi que toute l'activité liée aux *pods *: ingress \[6\],
+    [[wiki],](https://github.com/abes-esr/jres2024-okd/blob/main/documentation/registry.md)
+    etc...) ainsi que toute l'activité liée aux *pods *: ingress [6],
     OVN, CRI-O, kubelet, etc.
 
 ![](files/image4.png)
@@ -332,13 +332,13 @@ les services de type *cluster*, dans le but d'alléger les autres
 On se connecte au cluster sur l'adresse de l'API *openshift* grâce au
 fichier kubeconfig généré :
 
-export KUBECONFIG=\~/okd_install/auth/kubeconfig\
-\# ou avec le login temporaire kubeadmin, sur la plateforme OKD nommée
-orchidee\
-oc login -u kubeadmin -p \$(echo \~/okd_install/auth/kubeadmin-password)
-\\ https://api.orchidee.v102.abes.fr:6443\
-oc cluster-info\
-oc project\
+export KUBECONFIG=~/okd_install/auth/kubeconfig
+# ou avec le login temporaire kubeadmin, sur la plateforme OKD nommée
+orchidee
+oc login -u kubeadmin -p $(echo ~/okd_install/auth/kubeadmin-password)
+ https://api.orchidee.v102.abes.fr:6443
+oc cluster-info
+oc project
 oc get all
 
 ### Conclusion au sujet de l'installation
@@ -398,17 +398,17 @@ Kubernetes avec des CRDs (*Custom Resources Defintions*) qui lui sont
 propres. En voici une liste non exhaustive :
 
 -   *registry interne
-    [\[wiki\]](https://github.com/abes-esr/jres2024-okd/blob/main/documentation/registry.md)*\
+    [[wiki]](https://github.com/abes-esr/jres2024-okd/blob/main/documentation/registry.md)*
     OKD inclut un *registry* interne dans lequel il stocke et versionne
     les images téléchargées depuis le DockerHub ou autre, ou bien celles
     qui sont construites en interne.
 
--   *ImageStream et imageStreamTag*\
+-   *ImageStream et imageStreamTag*
     Ils permettent aux *deployment* de s'appuyer sur une version
     spécifique des images contenues dans un ou plusieurs *registries*.
     Cet objet est principalement utilisé par le *deploymentConfig*
 
--   le *deploymentConfig* (dc)\
+-   le *deploymentConfig* (dc)
     Il s'agit d'une CRD développée par Redhat qui vise à compléter l'API
     *deployment* de Kubernetes pour le rendre compatible de façon native
     avec les *triggers* de redéploiement. Le dc s'appuie sur
@@ -416,24 +416,24 @@ propres. En voici une liste non exhaustive :
     façon régulière ou sur demande avec celle déployée et prend la
     décision de mettre ou non l'image à jour.
 
--   *BuildConfig*\
+-   *BuildConfig*
     OKD embarque toutes les fonctionnalités de CI/CD, grâce à des objets
     tels que le *buildConfig* pour construire une image à partir des
     sources et les pipelines
 
--   *OpenDataFoundation (ODF) \[17\]
-    [\[wiki\]](https://github.com/abes-esr/jres2024-okd/blob/main/documentation/odf.md)*\
+-   *OpenDataFoundation (ODF) [17]
+    [[wiki]](https://github.com/abes-esr/jres2024-okd/blob/main/documentation/odf.md)*
     ODF a pour objectif de fournir au *cluster* OKD un *backend storage*
     de type *cloud* sur base de Ceph. Ceci offre une abstraction du
     stockage indépendante des caractéristiques des *drivers* CSI
     entièrement compatible avec les attentes du *cloud *: résilience,
     *snapshots*, extension à chaud, *mode file*, *block*, objet.
 
--   *Les opérateurs*\
+-   *Les opérateurs*
     Il s'agit d'un catalogue applicatif visant à étendre de façon très
     simple les fonctionnalités d'OKD en proposant des logiciels sous
     forme de containers propriétaires ou communautaires : *drivers* CSI,
-    ODF, AWX, ArgoCD, Tektonik, Velero, etc\...
+    ODF, AWX, ArgoCD, Tektonik, Velero, etc...
 
     Ces opérateurs permettent de réaliser les actions suivantes :
 
@@ -447,12 +447,12 @@ propres. En voici une liste non exhaustive :
 
 -   *Metrics/Dashboards ;*
 
--   *Backup* d'objets projets k8s avec Velero \[16\]
-    [\[wiki\]](https://github.com/abes-esr/jres2024-okd/blob/main/documentation/backup.md) ;
+-   *Backup* d'objets projets k8s avec Velero [16]
+    [[wiki]](https://github.com/abes-esr/jres2024-okd/blob/main/documentation/backup.md) ;
 
--   Virtualisation avec Kubevirt \[7\]
+-   Virtualisation avec Kubevirt [7]
 
--   etc\...
+-   etc...
 
 ## Outils de transformation
 
@@ -465,19 +465,19 @@ L'outil « yq » permet de traiter les fichiers yaml, mais cet outil n'est
 pas suffisamment complet pour réaliser le traitement du fichier
 docker-compose.yml. Cependant, yq reste utile pour passer facilement du
 format yaml au format json. Nous avons donc choisi d'utiliser
-«[ jq ](https://jqlang.github.io/jq/)» \[10\]\[11\], un standard.
+«[ jq ](https://jqlang.github.io/jq/)» [10][11], un standard.
 
 Quant à l'outil Sponge, il permet d'enregistrer les modifications dans
 le fichier initial sans l'écraser.
 
-`cat docker-compose.json \| jq \'del (.services\[\].mem_limit)\' \| yq -P
-\| sponge docker-compose.yml`
+`cat docker-compose.json | jq 'del (.services[].mem_limit)' | yq -P
+| sponge docker-compose.yml`
 
 ### [Kompose](https://kompose.io/) 
 
 Même s'ils ont des points communs (format yaml ou json), les paramètres
 décrivant une application ont chacun un format propre au gestionnaire de
-container choisi (Docker, k8s, rkt, etc\...).
+container choisi (Docker, k8s, rkt, etc...).
 
 Pour accomplir cette conversion, [kompose.io](https://kompose.io/) est
 un outil officiel fourni par Kubernetes qui vise à automatiser cette
@@ -486,7 +486,7 @@ conversion par une ligne de commande :
 `kompose -f docker-compose-resolved-cleaned.yml convert -c`
 
 On retrouve dans la table de conversion l'ensemble des directives de
-docker-compose prises en charge par Kompose  \[9\]. Dans le cas où il
+docker-compose prises en charge par Kompose  [9]. Dans le cas où il
 n'existe pas d'équivalents pour certains d'entre eux, par exemple
 « depends_on », ulimits, links, etc., Kompose les ignorera.
 
@@ -517,7 +517,7 @@ deployment.yml et service.yml avec kompose.io*
 Une fois l'ensemble des *manifests* généré suite à la conversion par
 [kompose](https://kompose.io/), il suffit d'appliquer la commande :
 
-`oc apply -f application-\*.yaml`
+`oc apply -f application-*.yaml`
 
 ou bien
 
@@ -577,12 +577,12 @@ ports:
 Pour palier les limitations de Kompose, l'équipe du SIRE a développé un
 *script bash* déposé sur
 [Github](https://github.com/abes-esr/jres2024-okd/blob/main/compose2manifests.sh)
-\[1\].
+[1].
 
 Ce script a pour vocation première d'automatiser l'ensemble des
 nombreuses actions qui permettent de valider la portabilité d'une
 application Docker vers k8s
-[\[wiki\]](https://github.com/abes-esr/jres2024-okd/blob/main/documentation/import_appli_pro.md).
+[[wiki]](https://github.com/abes-esr/jres2024-okd/blob/main/documentation/import_appli_pro.md).
 La conversion se fait depuis un environnement Docker d'origine (dev,
 test ou prod) vers l'environnement k8s de son choix.
 
@@ -592,9 +592,9 @@ de façon simple migrer ou tester son application sur Kubernetes.
 Enfin, par extension, il a été conçu pour couvrir des cas de figure de
 conversion plus universels en prenant en compte des paramètres étendus,
 tels que l'installation de drivers CSI
-[\[wiki\]](https://github.com/abes-esr/jres2024-okd/blob/main/documentation/drivers_csi.md),
+[[wiki]](https://github.com/abes-esr/jres2024-okd/blob/main/documentation/drivers_csi.md),
 la gestion de montage NFS
-[\[wiki\]](https://github.com/abes-esr/jres2024-okd/blob/main/documentation/lien_nfs.md),
+[[wiki]](https://github.com/abes-esr/jres2024-okd/blob/main/documentation/lien_nfs.md),
 ou bien la correction de syntaxe docker-compose.yml.
 
 #### Étapes
@@ -652,9 +652,9 @@ déployés en tenant compte des particularités d'OKD, à savoir :
     plusieurs pods ;
 
     ```
-    There are multi attachments for \"shared\" volume
+    There are multi attachments for "shared" volume
     A RWX csi driver is required for multi-attachments PVC
-    \"nfs.csi.k8s.io\" driver is installed to this k8s cluster
+    "nfs.csi.k8s.io" driver is installed to this k8s cluster
     There is an existing storage class nfs-csi
     nfs-csi4 that points to
     methana.v102.abes.fr:/pool_SAS_2/OKD
@@ -664,7 +664,7 @@ déployés en tenant compte des particularités d'OKD, à savoir :
     shared-persistentvolumeclaim.yaml...................................
     ```
 
-9.  la création d'un projet (*namespace*) du nom de l'application ;\
+9.  la création d'un projet (*namespace*) du nom de l'application ;
     ![](files/image12.png)
 
 10. la modification de la contrainte de sécurité (SCC) ;
@@ -679,7 +679,7 @@ déployés en tenant compte des particularités d'OKD, à savoir :
 13. la suppression des éléments non compatibles avec k8s suivant la
     matrice de correspondance (depends_on, etc.) ;
 
-14. le remplacement des « . » et des « \_ »par « - » ainsi que la
+14. le remplacement des « . » et des « _ »par « - » ainsi que la
     conversion en minuscule pour correspondre à la syntaxe k8s définie
     dans la
     [RFC 1123](https://praneethreddybilakanti.medium.com/1-2-understanding-kubernetes-object-names-and-ids-9e7b6e11ee7b)
@@ -689,7 +689,7 @@ déployés en tenant compte des particularités d'OKD, à savoir :
 
 15. la suppression du container de déploiement Docker Watchtower
     (remplacé par Keel
-    [\[wiki\]](https://github.com/abes-esr/jres2024-okd/blob/main/documentation/keel.md)
+    [[wiki]](https://github.com/abes-esr/jres2024-okd/blob/main/documentation/keel.md)
     dans Kubernetes).
 
 Le résultat étant concluant, nous avons poussé plus loin l'usage de ce
@@ -697,7 +697,7 @@ script pour obtenir sous k8s, en une exécution, le déploiement de
 l'application en ajoutant ces étapes supplémentaires :
 
 -   sélection et conversion des variables d'environnement sensibles
-    (*password*, etc\...) en objet k8s secret ;
+    (*password*, etc...) en objet k8s secret ;
 
 -   sélection et conversion des variables d'environnement non sensibles
     en objet k8s *configMap *;
@@ -706,8 +706,8 @@ l'application en ajoutant ces étapes supplémentaires :
 
 -   ajout d'une règle réseau pour rendre le service applicatif final
     accessible par l'adresse *ingress* (par défaut uniquement sur le
-    réseau interne) ;\
-    libération des *persistentVolume* s'ils existent ;\
+    réseau interne) ;
+    libération des *persistentVolume* s'ils existent ;
     ![](files/image15.png)
 
 -   transformation des volumes *bind* en *persistentVolumeClaim* k8s ;
@@ -733,13 +733,13 @@ l'application en ajoutant ces étapes supplémentaires :
 
 -   détection et transformation des volumes NFS en *persistentVolume* de
     type NFS
-    [\[wiki\]](https://github.com/abes-esr/jres2024-okd/blob/main/documentation/lien_nfs.md) ;
+    [[wiki]](https://github.com/abes-esr/jres2024-okd/blob/main/documentation/lien_nfs.md) ;
 
 -   transformation des volumes *bind* de type fichiers de configuration
     ou binaire en objet  *configMap *;
 
--   exposition du service pour obtenir l'URL \[6\] de la route d'accès à
-    l'application ;\
+-   exposition du service pour obtenir l'URL [6] de la route d'accès à
+    l'application ;
     ![](files/image18.png)
 
 -   déploiement de l'application 
@@ -751,7 +751,7 @@ l'application en ajoutant ces étapes supplémentaires :
 *5.  Exemple de modifications effectuées par le script
     compose2manifests.sh*
 
-### Cas pratique : Q[ualiMarc](https://qualimarc.sudoc.fr/)
+### Cas pratique : [QualiMarc](https://qualimarc.sudoc.fr/)
 
 L'Abes compte une vingtaine d'applications professionnelles destinées au
 monde documentaire et aux bibliothéques d'enseignement supérieur. Nous
@@ -779,7 +779,7 @@ Sans compter les services périphériques, elle est simplement constituée
 de quatre services : front, api, db, batch.
 
 ```
-yq -r \'.services\|keys\' docker-compose.yaml\
+yq -r '.services|keys' docker-compose.yaml
 - qualimarc-api
 - qualimarc-batch
 - qualimarc-db
@@ -823,7 +823,7 @@ catégories :
 
 Lors de la conversion par [Kompose](https://kompose.io/), les variables
 simples seront déclarées en tant qu'objet k8s *configMap* tandis que les
-variables simples seront appelées en tant qu'objet *secret.\
+variables simples seront appelées en tant qu'objet *secret.
 *Du côté du *deployment*, on fait respectivement appel à ces variables
 par la directive configMapKeyRef et secretKeyRef.
 
@@ -840,7 +840,7 @@ fichiers manifests yaml :
 
 Les fichiers générés par *Kompose* subissent à nouveau un ensemble
 d'actions décrites plus précisément sur cette page
-[\[wiki\]](https://github.com/abes-esr/jres2024-okd/blob/main/documentation/compose2manifests_functions.md).
+[[wiki]](https://github.com/abes-esr/jres2024-okd/blob/main/documentation/compose2manifests_functions.md).
 
 A l'issue de ce traitement, on obtient, par exemple pour le service
 *qualimarc-batch,* cet ensemble de fichiers :
@@ -853,7 +853,7 @@ A l'issue de ce traitement, on obtient, par exemple pour le service
 ```
 apiVersion: v1
 data:
-  spring-datasource-basexml-password: \*\*REPLACED\*\*
+  spring-datasource-basexml-password: **REPLACED**
 kind: Secret
 metadata:
   creationTimestamp: null
@@ -891,11 +891,7 @@ spec:
 
 #### Vérification du ***déploiement***
 
-`# oc get pods`
-
-![](files/image26.png){width="4.163194444444445in"
-height="1.1555555555555554in"}
-
+`# oc get pods`  
 `# oc get pvc`
 
 ### ![](files/image27.png)
@@ -941,7 +937,7 @@ avec redéploiement automatique.
 # Limitations d'OKD
 
 Bien que Redhat ait retiré le support IPI d'oVirt à partir de la version
-4.14, il est toujours possible d'installer OKD par la méthode UPI \[8\].
+4.14, il est toujours possible d'installer OKD par la méthode UPI [8].
 De plus, Redhat maintient le support d'IPI pour tous les autres
 *providers.*
 
@@ -950,7 +946,7 @@ On constate par ailleurs qu'il s'agit d'un produit en perpétuelle
 un ou deux mois). Ainsi jusqu'à la version 4.15, OKD était la version
 *downstream* d'Openshift sur base de FCOS (Fedora CoreOS), à partir de
 de la 4.16, OKD devient la version de *pre-release* d'Openshift sur base
-de SCOS (Stream CoreOS) \[3\].
+de SCOS (Stream CoreOS) [3].
 
 Enfin, même si on peut regretter que la courbe d'apprentissage reste
 très élevée, de nombreux outils en facilitent la mise en œuvre.
@@ -980,21 +976,21 @@ en production.
 N'excluant aucune piste, nous avons entamé une démarche d'audit avec
 Redhat pour étudier la faisabilité d'une mise en production
 d'*Openshift*. Nous avons alors appris que l'Université de Strasbourg
-avait un projet *Openshift*. Au cours d'une visio, l\'équipe nous a fait
+avait un projet *Openshift*. Au cours d'une visio, l'équipe nous a fait
 part de son retour d'expérience. L'Unistra a dédié une équipe à ce
 projet, et envisage même de proposer la fourniture de leur service
 *Openshift* aux établissements de l'ESR.
 
-## Installer des workers en bare metal \[13\]
+## Installer des workers en bare metal [13]
 
 L'objectif est de remplacer les VMs hébergeant les *workers* par du
 *bare metal* avec l'UPI
 
 ### Virtualisation avec kubevirt
 
-Dans la mesure où *oVirt* \[4\] est un projet dont on ne connaît pas
+Dans la mesure où *oVirt* [4] est un projet dont on ne connaît pas
 l'avenir, il peut être judicieux de se tourner vers *Openshift
-Virtualization* \[7\], la nouvelle plateforme de virtualisation de
+Virtualization* [7], la nouvelle plateforme de virtualisation de
 Redhat qui transforme les *workers* OKD en nœuds de *computing*.
 L'installation se fait simplement au moyen de l'opérateur kubevirt,
 cette solution ayant pour avantage de faire cohabiter des conteneurs et
@@ -1005,14 +1001,13 @@ des VMs gérés par un unique moteur d'orchestration, Kubernetes.
 Il est déjà possible d'installer Open Data Foundation sur des *workers*
 virtuels en s'appuyant sur le *driver* csi.ovirt.org. Mais dans ce cas,
 il n'est pas possible d'utiliser le protocole FC pour accéder à notre
-baie de disques. Dédier des nœuds *worker baremetal* à ODF \[17\]
+baie de disques. Dédier des nœuds *worker baremetal* à ODF [17]
 permettrait d'utiliser les drivers csi de la baie donnant accès au
 stockage Ceph par FC.
 
 ![](files/image28.jpeg)
 *7.  Architecture OKD de type bare metal
-    ouvrant la possibilité d*'ajouter la virtualisation ou/et le support
-    de Ceph.*
+    ouvrant la possibilité d'ajouter la virtualisation ou/et le support de Ceph.*
 
 ### Conclusion au sujet du choix à effectuer
 
@@ -1028,9 +1023,9 @@ essentielle pour un projet de cette ampleur.
 
 Ce projet marque le premier pas vers une architecture qui ouvrira de
 nouvelles perspectives aux développeurs de l'Abes, leur permettant de
-déployer des applications *cloud-native* en s\'appuyant sur des
+déployer des applications *cloud-native* en s'appuyant sur des
 solutions comme Ceph ou des pratiques modernes telles que le *gitops,*
-avec *ArgoCD* et les *pipelines* automatisés via Tekton *\[19\].*
+avec *ArgoCD* et les *pipelines* automatisés via Tekton *[19].*
 
 Enfin, ce projet a permis à l'équipe de se familiariser avec un monde
 technologique dont elle avait jusque-là une connaissance théorique,
