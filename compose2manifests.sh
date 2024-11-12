@@ -113,7 +113,7 @@ if [ -n "$sshfs" ]
 fi
 shopt -s extglob
 # rm -rf !(.env|docker-compose.yml|*.sh|.git|.|..)
-rm -rf !(.env|docker-compose.yml|*.sh|.git|.|..)
+rm -rf !(.env|docker-compose.yml|*.sh|.git|*.md|*.py|documentation|.|..)
 message
 
 if [ "$VARS_TYPE" = "clean" ]; then
