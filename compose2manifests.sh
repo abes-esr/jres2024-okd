@@ -361,7 +361,9 @@ if [[ "$ENV" == "prod" ]] || [[ "$ENV" == "test" ]] || [[ "$ENV" == "dev" ]]; th
 		case $method in 
 			github )
 				italics "Fetching \"docker-compose.yml\" from GitHub.......................................";  \
-				wget -N https://raw.githubusercontent.com/abes-esr/$NAME-docker/develop/docker-compose.yml 2> /dev/null; \
+				read -p "$(italics "?? Enter DockerHub URL docker-compose.yml path"): " path
+				path=${path:-https://raw.githubusercontent.com/abes-esr/$NAME-docker/develop/docker-compose.yml}
+				wget -N $path 2> /dev/null; \
 				fetch "docker-compose.yml"
 				echo "";;
 			docker_host )
@@ -943,7 +945,7 @@ title "3.3" "Patching multi-attached volumes"
 # find targeted volumes 
 export volumes=$(cat $CLEANED | yq eval -o json | jq -r '.services|to_entries[]|.value|select(has("volumes"))|.volumes[]|select((.type)=="volume").source'|uniq)
 
-if [ -z $volumes ]; then  
+if [ -z "$volumes" ]; then  
 	blue "No multi attached pvc found"; 
 fi
 
@@ -977,7 +979,7 @@ EOF
 for i in $volumes
     do number=$(cat $CLEANED | yq eval -o json | jq --arg i $i -r '.services|to_entries[]|.value|select(has("volumes"))|.volumes[]|=select((.type)=="volume")| {(.container_name): (.volumes[]|select(.type=="volume"))}|to_entries[]|select(.value.source==$i).key'|wc -l)
      if test $number -gt 1
-        then blue "There is multi attachments for \"$i\" volume"
+        then blue "There are multi attachments for \"$i\" volume"
              echo "A RWX csi driver is required for multi-attachments PVC"
             if [[ -n "$nfs_csi" ]]
                 then
