@@ -27,7 +27,7 @@ L'utilisation et la description des fonctions de ce script sont détaillées [ic
 
 La documentation détaillée relative à l'article et à OKD/Openshift peut être consultée à partir de ce [menu](documentation/README.md).
 
-### Installation de compose2manifests.sh
+### Initialisation et utilisation de compose2manifests.sh
 Cette procédure ne nécessite qu'un simple fichier docker-compose.yml et du .env correspondant dans le répertoire courant. 
 Il faut comme prérequis les paquets (la procédure est indépendante de l'OS GNU/Linux)
 - jq

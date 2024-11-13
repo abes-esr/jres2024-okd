@@ -4,7 +4,9 @@ Cette documentation est donnée à titre d'exemple du travail collaboratif accom
 
 \- [Article JRES24 Vers la symphonie des conteneurs](article_jres24.md)
 
-\- [Poster JRES24 Vers la symphonie des conteneurs](files/poster-jres-2024.jpg)
+\- [Poster JRES24 Vers la symphonie des conteneurs](files/poster-jres-2024.jpg) 
+
+\- [Video JRES24 Cas d'usage de compose2manifests.sh avec Qualimarc](https://vimeo.com/1022133270/90cfd9e0a7)
 
 \- [Installation d\'OKD sous Ovirt](Installation.md)
 
