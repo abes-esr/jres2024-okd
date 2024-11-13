@@ -84,7 +84,9 @@ api=$(oc config view --minify -o 'jsonpath={..server}')
 echo -ne "Cluster k8s: "
 blue $api
 echo -ne "Namespace in use: "
-blue "\"$namespace\"\n"
+blue "\"$namespace\""
+echo -e "A video usecase is available at: https://vimeo.com/1022133270/90cfd9e0a7\n" 
+
 case $1 in
 	test|dev|prod)
 		echo -e "You will deploy appli $(blue \"$NAME\") from the Docker $(blue \"$1\") platform to\n$(blue \"$api\") k8s cluster in the $(blue \"$namespace\") namespace.\""

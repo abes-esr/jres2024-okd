@@ -16,6 +16,7 @@ help () {
 	echo -e "helm: \t\t\tKompose option that generates k8s manifest into helm skeleton for appli.yml\n"
 	echo -e "example: ./compose2manifests.sh local item env_file kompose\n"
 	echo -e "example: ./compose2manifests.sh prod qualimarc default kompose helm\n"
+	echo -e "A video usecase is available at: https://vimeo.com/1022133270/90cfd9e0a7\n" 
 	exit 1
 }
 
@@ -187,7 +188,8 @@ api=$(oc config view --minify -o 'jsonpath={..server}')
 echo -ne "Cluster k8s: "
 blue $api
 echo -ne "Namespace in use: "
-blue "\"$namespace\"\n"
+blue "\"$namespace\""
+echo -e "A video usecase is available at: https://vimeo.com/1022133270/90cfd9e0a7\n" 
 case $1 in
 	test|dev|prod)
 		echo -e "You will deploy appli $(blue \"$NAME\") from the Docker $(blue \"$1\") platform to\n$(blue \"$api\") k8s cluster in the $(blue \"$namespace\") namespace.\""
