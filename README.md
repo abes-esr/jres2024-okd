@@ -23,34 +23,46 @@ Le script [compose2manifests.sh](compose2manifests.sh) a été complété pour r
   * le support des montages NFS
   * etc...
 
-L'utilisation et la description des fonctions de ce scripts sont détaillées [ici](documentation/compose2manifests_functions.md).
+L'utilisation et la description des fonctions de ce script sont détaillées [ici](documentation/compose2manifests_functions.md).
 
 La documentation détaillée relative à l'article et à OKD/Openshift peut être consultée à partir de ce [menu](documentation/README.md).
 
-### Script Bash
+### Script Bash compose2manifests.sh
 Cette procédure ne nécessite qu'un simple fichier docker-compose.yml et du .env correspondant dans le répertoire courant. 
-Il faut comme prérequis les paquets (la procédure est indépendante de l'OS)
+Il faut comme prérequis les paquets (la procédure est indépendante de l'OS GNU/Linux)
 - jq
 ```bash
-sudo wget https://github.com/jqlang/jq/releases/latest/download/jq-linux-amd64 -O /usr/local/bin/jq &&  sudo  chmod +x /usr/bin/jq
+sudo wget https://github.com/jqlang/jq/releases/latest/download/jq-linux-amd64 -O /usr/local/bin/jq &&  sudo  chmod +x /usr/local/bin/jq
 ```
 - yq
 ```bash
-sudo wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/local/bin/yq &&  sudo  chmod +x /usr/bin/yq
+sudo wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/local/bin/yq &&  sudo  chmod +x /usr/local/bin/yq
 ```
 - docker-compose
 ```bash
-sudo wget https://github.com/docker/compose/releases/latest/download/docker-compose-linux-aarch64 -O /usr/local/bin/docker-compose &&  sudo  chmod +x /usr/bin/docker-compose
+sudo wget https://github.com/docker/compose/releases/latest/download/docker-compose-linux-aarch64 -O /usr/local/bin/docker-compose &&  sudo  chmod +x /usr/bin/local/docker-compose
 ```
 - kompose
 ```bash
-sudo wget https://github.com/kubernetes/kompose/releases/latest/download/kompose-linux-amd64 -O /usr/local/bin/kompose &&  sudo  chmod +x /usr/bin/kompose
+sudo wget https://github.com/kubernetes/kompose/releases/latest/download/kompose-linux-amd64 -O /usr/local/bin/kompose &&  sudo  chmod +x /usr/local/bin/kompose
+```
+- jc
+```bash
+sudo wget -q https://github.com/kellyjonbrazil/jc/releases/download/v1.25.3/jc-1.25.3-linux-x86_64.tar.gz -O /usr/local/bin/ | tar xzf - |chmod +x /usr/local/bin/jc
 ```
 - moreutils
 ```bash
-yum install moreutils -y 
+# el
+dnf config-manager --set-enabled powertools powertools
+dnf config-manager --set-enabled powertools crb
+dnf install moreutils -y 
+# debian/ubuntu
 apt install moreutils -y
 ```
+
+L'inventaire des versions logicielles est indiqué en début de script:
+
+![](documentation/files/Sélection_529.png)
 
 Ensuite il suffit d'exécuter simplement:
 ```bash
