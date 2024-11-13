@@ -1,6 +1,8 @@
 
 # JRES 24: Vers la symphonie des conteneurs
 
+Cet article détaille le [poster](files/poster-jres-2024.jpg)  associé.
+
 ### Résumé 
 
 Le service Infrastructure de [l'Abes](https://www.abes.fr/) gère le

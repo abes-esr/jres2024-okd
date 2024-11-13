@@ -2,6 +2,10 @@
 
 Cette documentation est donnée à titre d'exemple du travail collaboratif accompli sur le POC `OKD` dans le cadre de la contribution du SIRE aux `jres 2024` https://2024.jres.org/programme. Elle regroupe l'ensemble de la recherche et de la mise en oeuvre sur le thème `Openshift/OKD` sans pourtant être exhaustive. Les instructions propres au SI de l'Abes ainsi que les données sensibles supprimées ne représentent en aucun cas des cas généraux d'utilisation.
 
+\- [Article JRES24 Vers la symphonie des conteneurs](article_jres24.md)
+
+\- [Poster JRES24 Vers la symphonie des conteneurs](files/poster-jres-2024.jpg)
+
 \- [Installation d\'OKD sous Ovirt](Installation.md)
 
 \- [Connexion à l\'API](connexion_api.md)
