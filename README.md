@@ -10,7 +10,7 @@ Ces scripts ont été développés dans le cadre d'un POC piloté par le Service
 ## JRES 24
 Le comité d'organisation des [JRES24](https://2024.jres.org/) (Rennes, 10-13 décembre 24) ayant validé notre proposition ["Vers la symphonie des conteneurs"](https://2024.jres.org/programme#modal-23), nous avons avons ajouté à ce repo l'ensemble des éléments qui ont été nécessaires à la conception de l'[article](documentation/article_jres24.md) et du [poster](documentation/files/poster-jres-2024.jpg).
 
-Le script [compose2manifests.sh](compose2manifests.sh) a été complété pour répondre à un cas d'usage plus global, apportant des fonctionnalités supplémentaires telles que 
+Le script [compose2manifests.sh](compose2manifests.sh) a été complété pour répondre à un cas d'usage plus global, apportant des fonctionnalités supplémentaires telles que:
   * l'installation de pré-requis
   * la recherche automatiques des hôtes Docker
   * la vérification de la connectivité des hôtes 
@@ -27,7 +27,7 @@ L'utilisation et la description des fonctions de ce script sont détaillées [ic
 
 La documentation détaillée relative à l'article et à OKD/Openshift peut être consultée à partir de ce [menu](documentation/README.md).
 
-### Script Bash compose2manifests.sh
+### Installation de compose2manifests.sh
 Cette procédure ne nécessite qu'un simple fichier docker-compose.yml et du .env correspondant dans le répertoire courant. 
 Il faut comme prérequis les paquets (la procédure est indépendante de l'OS GNU/Linux)
 - jq
@@ -105,3 +105,7 @@ oc get all
 ./compose2manifests.sh prod item secret kompose helm
 ./compose2manifests.sh local qualimarc secret kompose helm
 ```
+
+#### Cas d'usage avec l'application Qualimarc
+Vidéo d'exemple d'utilisation du script avec [Qualimarc](https://qualimarc.sudoc.fr)  
+https://vimeo.com/1022133270/90cfd9e0a7 
