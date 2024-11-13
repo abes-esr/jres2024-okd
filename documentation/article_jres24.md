@@ -332,14 +332,16 @@ les services de type *cluster*, dans le but d'alléger les autres
 On se connecte au cluster sur l'adresse de l'API *openshift* grâce au
 fichier kubeconfig généré :
 
-export KUBECONFIG=~/okd_install/auth/kubeconfig
-# ou avec le login temporaire kubeadmin, sur la plateforme OKD nommée
-orchidee
-oc login -u kubeadmin -p $(echo ~/okd_install/auth/kubeadmin-password)
- https://api.orchidee.v102.abes.fr:6443
-oc cluster-info
-oc project
-oc get all
+`export KUBECONFIG=~/okd_install/auth/kubeconfig`  
+
+ou bien avec le login temporaire kubeadmin, sur la plateforme OKD nommée orchidee  
+
+`oc login -u kubeadmin -p $(echo ~/okd_install/auth/kubeadmin-password)
+ https://api.orchidee.v102.abes.fr:6443`
+
+`oc cluster-info`  
+`oc project`  
+`oc get all`
 
 ### Conclusion au sujet de l'installation
 
