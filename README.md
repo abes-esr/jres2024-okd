@@ -1,14 +1,27 @@
 # Scripts de conversion Docker vers Kubernetes
 
 
-## Contexte
+## Contexte initial
 
-Le but de ce repo est de rassembler différents scripts bash, python, ansible visant à normaliser et convertir un fichier docker-compose.yml en manifests k8s avec différentes options telles que la gestion des env_file et des secrets. 
+Le but initial de ce repo était de rassembler différents scripts bash, python, ansible visant à normaliser et convertir un fichier docker-compose.yml en manifests k8s avec différentes options telles que la gestion des env_file et des secrets. 
 
 Ces scripts ont été développés dans le cadre d'un POC piloté par le Service Infrastructure et Réseau, qui visait initialement à porter des applications professionnelles de l'Abes fonctionnant sous Docker vers Kubernetes sans régressions. OKD, le projet upstream d'Openshift, a été choisi comme distribution k8s.
 
 ## Jres 224
 Le comité d'organisation des [Jres24](https://2024.jres.org/) (Rennes, 10-13 décembre 24) ayant validé notre proposition ["Vers la symphonie des conteneurs"](https://2024.jres.org/programme#modal-23), nous avons avons ajouté à ce repo l'ensemble des éléments qui ont été nécessaires à la conception de l'[article](documentation/article_jres24.md) et du [poster](documentation/files/poster-jres-2024.jpg).
+
+Le script [compose2manifests.sh](compose2manifests.sh) a été complété pour répondre à un cas d'usage plus global, apportant des fonctionnalités supplémentaires telles que 
+  * l'installation de pré-requis
+  * la recherche automatiques des hôtes Docker
+  * la vérification de la connectivité des hôtes 
+  * l'installation des clés ssh
+  * la recherche dynamiques des ports applicatifs
+  * la copie de persistentVolumes
+  * l'installation de drivers CSI
+  * le traitement des PV en multi attachements
+  * le calcul dynamique des taille des PV
+  * le support des montages NFS
+  * etc...
 
 ### Script Bash
 Cette procédure ne nécessite qu'un simple fichier docker-compose.yml et du .env correspondant dans le répertoire courant. 
