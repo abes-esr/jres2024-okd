@@ -10,7 +10,7 @@ Ces scripts ont été développés dans le cadre d'un POC piloté par le Service
 ## JRES 24
 Le comité d'organisation des [JRES24](https://2024.jres.org/) (Rennes, 10-13 décembre 24) ayant validé notre proposition ["Vers la symphonie des conteneurs"](https://2024.jres.org/programme#modal-23), nous avons avons ajouté à ce repo l'ensemble des éléments qui ont été nécessaires à la conception de l'[article](documentation/article_jres24.md) et du [poster](documentation/files/poster-jres-2024.jpg).
 
-Le script [compose2manifests.sh](compose2manifests.sh) a été complété pour répondre à un cas d'usage plus global, apportant des fonctionnalités supplémentaires telles que:
+La version [1.0](https://github.com/abes-esr/jres2024-okd/releases/tag/1.0) script [compose2manifests.sh](compose2manifests.sh) a été complété pour répondre à un cas d'usage plus global, apportant des fonctionnalités supplémentaires telles que:
   * l'installation de pré-requis
   * la recherche automatiques des hôtes Docker
   * la vérification de la connectivité des hôtes 
@@ -23,9 +23,31 @@ Le script [compose2manifests.sh](compose2manifests.sh) a été complété pour r
   * le support des montages NFS
   * etc...
 
+La version [2.0](https://github.com/abes-esr/jres2024-okd/releases/tag/2.0) apporte le support du CI/CD Openshift (sur le cluster) ainsi que le build de l'image en local.
+
 L'utilisation et la description des fonctions de ce script sont détaillées [ici](documentation/compose2manifests_functions.md).
 
 La documentation détaillée relative à l'article et à OKD/Openshift peut être consultée à partir de ce [menu](documentation/README.md).
+
+Pour être pertinent, ce script a été testé avec succès pour la conversion d'une multitude de cas potentiellement différents de docker-compose.yml, notamment les applications suivantes
+
+- [qualimarc](https://github.com/abes-esr/prada-docker)
+- [theses](https://github.com/abes-esr/theses-docker)
+- [movies](https://github.com/abes-esr/movies-docker)
+- [abesstp](https://github.com/abes-esr/abesstp-docker)
+- [item](https://github.com/abes-esr/item-docker)
+
+### Cas d'usage du déploiement de l'application Qualimarc
+Vidéo d'exemple d'utilisation du script 1.0 avec [Qualimarc](https://qualimarc.sudoc.fr)
+
+https://vimeo.com/1022133270/90cfd9e0a7 
+
+### Cas d'usage du déploiement de l'application Abesstp après le build d'une image 
+Vidéo d'exemple d'utilisation du script 2.0 avec [AbesSTP](https://stp.abes.fr)
+
+ https://vimeo.com/1037464417.
+
+ Ce cas inclut la construction d'une image suivant un contexte de build avec Openshift ou en local.
 
 ### Initialisation et utilisation de compose2manifests.sh
 Cette procédure ne nécessite qu'un simple fichier docker-compose.yml et du .env correspondant dans le répertoire courant. 
@@ -82,7 +104,7 @@ oc get all
 #### Options du script
 
 ```bash
-./compose2manifests.sh [ prod || test || dev || local ] [ appli_name ] [default || '' || secret || env_file | help] [kompose] [helm]
+./compose2manifests.sh [ prod || test || dev || local ] [ appli_name ] [default || '' || secret || env_file | copy | help] [kompose] [helm]
 
 ```
 
@@ -92,20 +114,22 @@ oc get all
 
 - **$3** default or '' : Generates cleaned appli.yml compose file to plain k8s manifests
 
-- **$4** env_file: Generates cleaned advanced appli.yml with migrating plain 'environment' to 'env_file' statement, will be converted into k8s configmaps"
+- **$3** env_file: Generates cleaned advanced appli.yml with migrating plain 'environment' to 'env_file' statement, will be converted into k8s configmaps
 
-- **$5** secret: The same as env_file, in addition generates advanced appli.yml with migrating all vars containing 'PASSWORD' or 'KEY' as keyword to secret,will be converted into k8s secrets"
+- **$3** secret: The same as env_file, in addition generates advanced appli.yml with migrating all vars containing 'PASSWORD' or 'KEY' as keyword to secret, will be converted into k8s secrets
 
-- **$6** kompose: Converts appli.yml into plain k8s manifests ready to be deployed with 'kubectl apply -f *.yaml
+- **$3** copy: only run PVCs copy staff
 
-- **$7** helm: Kompose option that generates k8s manifest into helm skeleton for appli.yml
+- **$4** kompose: Converts appli.yml into plain k8s manifests ready to be deployed with 'kubectl apply -f *.yaml
+
+- **$5** provider: 'kubernetes'(default) produces deployment files or openshift produces deploymentConfig and imageStream files
+
+- **$6** helm: Kompose option that generates k8s manifest into helm skeleton for appli.yml
 
 - exemples
 ```bash
 ./compose2manifests.sh prod item secret kompose helm
 ./compose2manifests.sh local qualimarc secret kompose helm
+./compose2manifests.sh local abesstp copy
+./compose2manifests.sh test movies env_file kompose openshift
 ```
-
-### Cas d'usage avec l'application Qualimarc
-Vidéo d'exemple d'utilisation du script avec [Qualimarc](https://qualimarc.sudoc.fr)  
-https://vimeo.com/1022133270/90cfd9e0a7 

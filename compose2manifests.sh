@@ -17,7 +17,8 @@ help () {
 	echo -e "helm: \t\t\tKompose option that generates k8s manifest into helm skeleton for appli.yml\n"
 	echo -e "example: ./compose2manifests.sh local item env_file kompose\n"
 	echo -e "example: ./compose2manifests.sh prod qualimarc default kompose helm\n"
-	echo -e "A video usecase is available at: https://vimeo.com/1022133270/90cfd9e0a7\n" 
+	echo -e "A simple video usecase is available at: https://vimeo.com/1022133270/90cfd9e0a7\n" 
+	echo -e "A building context video usecase is available at: https://vimeo.com/1037464417"
 	exit 1
 }
 
