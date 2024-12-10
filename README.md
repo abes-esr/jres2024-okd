@@ -106,6 +106,6 @@ oc get all
 ./compose2manifests.sh local qualimarc secret kompose helm
 ```
 
-#### Cas d'usage avec l'application Qualimarc
+### Cas d'usage avec l'application Qualimarc
 Vidéo d'exemple d'utilisation du script avec [Qualimarc](https://qualimarc.sudoc.fr)  
 https://vimeo.com/1022133270/90cfd9e0a7 
