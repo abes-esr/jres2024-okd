@@ -7,11 +7,12 @@
 # ./compose2manifests.sh [ prod || test || dev || local ] [ appli_name ] [default || '' || secret || env_file | help] [kompose] [helm]\n"
 
 help () {
-	echo -e "usage: ./compose2manifests.sh [ prod || test || dev || local ] [ appli_name ] [default || '' || secret || env_file | help] [kompose] [helm]\n"
+	echo -e "usage: ./compose2manifests.sh [ prod || test || dev || local ] [ appli_name ] [default || '' || secret || env_file | copy | help] [kompose] [helm]\n"
 	echo -e "dev|test|prod: \tenvironnement sur lequel récupérer le .env. Local: fournir manuellement les '.env' et 'docker-compose.yml'"
 	echo -e "appli_name: \t\tnom de l'application à convertir"
 	echo -e "default or '' : \tGenerates cleaned appli.yml compose file to plain k8s manifests "
 	echo -e "env_file: \t\tGenerates cleaned advanced appli.yml with migrating plain 'environment' \n\t\t\tto 'env_file' statement, will generate k8s \"configmaps\" for common vars and \"secrets\" for vars containing 'PASSWORD' or 'KEY' as keyword"
+	echo -e "copy: \t\t only run PVCs copy staff"
 	echo -e "kompose: \t\tConverts appli.yml into plain k8s manifests ready to be deployed with \n\t\t\t'kubectl apply -f *.yaml"
 	echo -e "helm: \t\t\tKompose option that generates k8s manifest into helm skeleton for appli.yml\n"
 	echo -e "example: ./compose2manifests.sh local item env_file kompose\n"
@@ -20,11 +21,14 @@ help () {
 	exit 1
 }
 
+source functions.sh
+
 ENV=$1
 NAME=$2
 VARS_TYPE=$3
 KOMPOSE=$4
-HELM=$5
+PROVIDER=${5:-kubernetes}
+HELM=$6
 
 # RED="31"
 # GREEN="32"
@@ -51,7 +55,7 @@ case $NAME in
 esac
 
 case $VARS_TYPE in
-	default | '' | secret | env_file)
+	default | '' | secret | env_file | copy)
         ;;
 	*)
 		help;;
@@ -97,6 +101,8 @@ message () {
 	fi 
 }
 
+calc(){ awk "BEGIN { print $*}"; }
+
 step "1" "Project Initialization........"
 
 title "1.1" "Cleaning working dir" 
@@ -113,7 +119,6 @@ if [ -n "$sshfs" ]
 		exit 1
 fi
 shopt -s extglob
-# rm -rf !(.env|docker-compose.yml|*.sh|.git|.|..)
 rm -rf !(.env|docker-compose.yml|*.sh|.git|*.md|*.py|documentation|.|..)
 message
 
@@ -192,10 +197,10 @@ blue "\"$namespace\""
 echo -e "A video usecase is available at: https://vimeo.com/1022133270/90cfd9e0a7\n" 
 case $1 in
 	test|dev|prod)
-		echo -e "You will deploy appli $(blue \"$NAME\") from the Docker $(blue \"$1\") platform to\n$(blue \"$api\") k8s cluster in the $(blue \"$namespace\") namespace.\""
+		echo -e "You will deploy appli $(blue \"$NAME\") from the Docker $(blue \"$1\") platform to\n$(blue \"$api\") to $(blue \"$PROVIDER\") cluster in the $(blue \"$namespace\") namespace.\""
 		;;
 	local)
-		echo -e "You will deploy appli $(blue \"$NAME\") from a docker-compose.yml file and a .env file (provided by yourself) to $(blue \"$api\") k8s cluster in the $(blue \"$namespace\") namespace."
+		echo -e "You will deploy appli $(blue \"$NAME\") from a docker-compose.yml file and a .env file (provided by yourself) $(blue \"$api\") to $(blue \"$PROVIDER\") cluster in the $(blue \"$namespace\") namespace."
 		;;
 		*)
 		echo "Bad arguments"
@@ -205,11 +210,55 @@ esac
 if [[ $(echo $namespace | grep $NAME > /dev/null && echo $?) != 0 ]];
 	then
 		echo -e "${YELLOW}!! Warning !! ${ENDCOLOR}: current OKD namespace $(blue \"$namespace\") may not correspond to the appli $(blue \"$NAME\") you are about to deploy.\n"
-		read -p "$(italics "?? Enter the name of a new namespace relative to $(blue \"$NAME\")"): " namespace
-		blue "$namespace"
 fi
 echo "################################################################################################################################"
 echo -e ""
+
+prod_test_dev() {
+	if [[ "$ENV" == "prod" ]] || [[ "$ENV" == "test" ]] || [[ "$ENV" == "dev" ]]; 
+		then
+			$*
+			return 7
+	fi
+}
+
+is_empty_project() {
+		project=${project:-$namespace}
+		test_project=$(oc get all -n $project -o json|jq '(if .items==[] then false else true end)')
+		if [ "$test_project" != "false" ]
+			then
+				read -p "$(italics "?? Project $project is not empty. Do you want to erase all resources? ..............$(faint "[n]")"): " yn 
+				yn=${yn:-n}
+				if [ "$yn" = y ]
+					then
+						oc delete project $project		
+				fi
+		fi
+		oc new-project $project >/dev/null
+		echo -e "Setting SCC anyuid to default SA.......................................\n"
+		oc adm policy add-scc-to-user anyuid -z default		
+}
+
+create_project() {
+		oc project
+		while true; 
+		do
+			read -p "$(italics "?? Would you like to create a new project? (y/n)....................................$(faint "[y]")"): " yn
+			yn=${yn:-y}
+			case $yn in
+				[Yy]* )                         
+					read -p "$(italics "?? Enter the name of the project $(faint "[$namespace]")....................................:") " project
+					namespace=${project:-$namespace}
+					break;;
+				[Nn]* )
+					break;;
+				* ) echo "Please answer yes or no.";;
+			esac
+		done
+		is_empty_project
+		oc project $project
+		echo -e ""
+}
 
 set_ssh_key() {
 
@@ -266,17 +315,20 @@ for i in $docker_hosts
 
 }
 
-# Check ssh key presence 
-set_ssh_key
-
-# Docker hosts domain identification
+set_domain() {
 dom=$(hostname -d)
 read -p "$(italics "?? Please enter the domain (default is the one of the bastion) $(faint [$dom]): ")" domain2
 domain=${domain:-$dom}
 blue $domain
+}
 
-echo ""
+create_project
 
+# Check ssh key presence 
+set_ssh_key
+
+# Docker hosts domain identification
+set_domain
 
 ask_testing_ssh() {
 echo -e "${YELLOW}!!! Warning !!!${ENDCOLOR}"
@@ -344,10 +396,175 @@ get_running_docker() {
 		fi
 
 		blue "\"$NAME\" is running on $diplo\n"
-		mkdir $NAME-docker-${ENV} && cd $NAME-docker-${ENV}
-
 		docker_host="${diplo}.${domain}"
 }
+
+dockerhub_auth() {
+
+	read -p "$(italics "?? Do you want to authenticate against DockerHub? $(faint "[n]")"): " ynyn
+	ynyn=${ynyn:-n}
+	case $ynyn in
+		[Yy]* ) 
+			read -p "$(italics "?? DockerHub server $(faint "[docker.io]")"): " dh_server
+			dh_server=${dh_server:-docker.io}
+			read -p "$(italics "?? DockerHub username" ): " dh_user
+			read -p "$(italics "?? DockerHub password" ): " dh_passwd
+			echo -e "Creation of docker secret for pulling images without restriction.......................................\n"
+			oc create secret docker-registry docker.io --docker-server=${dh_server} --docker-username=${dh_user} --docker-password=${dh_passwd}
+			oc secrets link default docker.io --for=pull
+			echo -e "\n"
+			;;
+	esac
+}
+
+secret_pull() {
+		echo -e "Creation of docker secret for pulling images without restriction.......................................\n"
+		oc create secret docker-registry $1 --docker-server=${1} --docker-username=${dh_user} --docker-password=$dh_passwd
+		oc secrets link default $1 --for=pull
+}
+
+pusher_sa() {
+        oc create serviceaccount pusher
+		sleep 2
+        pusher=$(oc get -o json sa pusher| jq -r '.secrets[0].name')
+        TOKEN=$(oc get -o json secrets $pusher |jq -r '.metadata.annotations."openshift.io/token-secret.value"')
+		oc policy add-role-to-user system:image-builder -z pusher
+}
+
+docker_login() {
+
+	echo "Setting registry authentication for pushing images......."
+	oc_registry=$(oc get route default-route -n openshift-image-registry -o json | jq -r .spec.host)
+	registry_cert=$(oc extract --confirm=true secret/router-certs-default -n openshift-ingress --to=/tmp/$oc_registry/ | grep crt)
+
+	if [[ -z "$1" ]]
+		then
+			registry=$oc_registry
+		else
+			registry=$1
+	fi
+
+	if [ "$registry" = "docker.io" ]
+		then
+			read -p "$(italics "?? Enter DockerHub user: ")" dh_user
+			read -p "$(italics "?? Enter DockerHub password" ): " dh_passwd
+			echo $dh_passwd | docker login -u $dh_user --password-stdin >/dev/null 2>&1
+		else 
+			dh_user=any
+			oc whoami -t 2>/tmp/toto
+			if [ $(grep "error" /tmp/toto | wc -l) = 0 ];
+				then 
+					TOKEN=$(oc whoami -t)
+				else
+					while true; do
+					echo "Requiring a token to connect to $registry..."
+					pusher_sa
+					if [ -z $TOKEN ]
+						then 
+							echo "There is no valid token to authenticate against $registry, please check your credentials"
+						else
+							break
+					fi
+					done
+			fi
+			command="echo $TOKEN | docker --tlscacert $registry_cert login -u $dh_user $registry --password-stdin"
+			echo $TOKEN | docker --tlscacert $registry_cert login -u $dh_user $registry --password-stdin >/dev/null 2>&1
+			if [ $(echo $?) = 0 ]
+				then
+					echo -e "$(blue "Login for pushing to $registry Succeeded")"
+				else
+					read -p "$(italics "?? Retry with an adjusted plain docker login command: $(faint "$command"): ")" docker_command
+					eval "$docker_command"
+			fi
+			read -p "$(italics "?? Enter DockerHub user: ")" dh_user
+			read -p "$(italics "?? Enter DockerHub password" ): " dh_passwd
+	secret_pull docker.io
+	fi
+}
+
+build_image() {
+
+	for build_service in $build_services;
+		do
+			echo -e "########################################### ${YELLOW}Building $build_service${ENDCOLOR} ###########################################"
+			if [ -z "$docker_host" ]; 
+				then
+					while true; do
+						case $docker_host in
+							"" )
+								read -p "$(italics "?? Enter the Docker host where $NAME is running on: ")" docker_host;;
+							* )	
+								docker_host=${docker_host}.${domain}
+								break;;
+						esac
+					done
+			fi
+			if [ -z "$path" ]; 
+				then					
+					read -p "$(italics "?? Enter docker-compose.yml path on host \"$docker_host\" $(faint [/opt/pod/$NAME-docker]): ")" path
+					path=${path:-/opt/pod/$NAME-docker}
+			fi
+			CONTEXT=$(cat docker-compose.yml |yq -ojson |jq --arg build_service "$build_service" -r '.services|to_entries[]|select(.value.container_name==$build_service).value.build')
+			IMAGE=$(cat $NAME.yml|yq -ojson |jq --arg build_service "$build_service" -r '.services|to_entries[]|select(.value.container_name==$build_service).value.image')
+			echo -e "$(blue \"$build_service\"): Syncing build context from $(blue \"$docker_host\") ..............\n"
+			rsync -a --info=progress2 root@$docker_host:/$path/$CONTEXT .
+			message
+			echo -e "$(blue \"$build_service\"): Building $(blue \"$IMAGE\") ............\n"
+			docker build -q -t $IMAGE ${CONTEXT##*/}
+			message
+			echo ''
+			docker_push_image
+		done
+}
+
+docker_push_image() {
+
+	if [ "$is" = "y" ]
+		then
+			echo "oc create is $build_service --lookup-local=true"
+			oc create is $build_service --lookup-local=true
+	fi
+	echo "Pushing image $(blue $build_service) to registry $(blue "$registry")............"
+	echo "docker tag $IMAGE $registry/$namespace/$IMAGE"
+	docker tag $IMAGE $registry/$namespace/$IMAGE
+	echo "docker push $registry/$namespace/$IMAGE"
+	docker push $registry/$namespace/$IMAGE
+}
+
+oc_tag_image() {
+
+	not_build_services=$(cat $NAME.yml | yq -o json|jq -r '.services|to_entries[]|select(.value|has("build")|not).value.container_name')
+	for not_build_service in $not_build_services
+		do 
+			if [[ "$PROVIDER" != "openshift" ]]
+				then
+					oc create is $not_build_service --lookup-local=true
+			fi 
+			IMAGE_TGT=$(cat $NAME.yml | yq -o json|jq --arg tgt "$not_build_service" -r '.services|to_entries[].value|select(."container_name"=="\($tgt)").image')
+			IMAGE_TAG=$(cat $NAME.yml | yq -o json|jq --arg tgt "$not_build_service" -r '.services|to_entries[].value|select(."container_name"=="\($tgt)").image|split(":")|last')
+			oc tag --source=docker $IMAGE_TGT $not_build_service:$IMAGE_TAG
+			oc set image-lookup deploy/$not_build_service
+		done
+}
+
+ask_docker_host() {
+	if [ -z "$docker_host" ]; 
+	then
+		while true; do
+			case $docker_host in
+				'' )
+					read -p "$(italics "?? Enter the Docker fqdn where $NAME is running on: ")" docker_host
+					;;
+				* )	
+					docker_host=${docker_host}.${domain}
+					break;;
+			esac
+		done
+fi
+}
+
+# Creating working dir
+mkdir $NAME-docker-${ENV} && cd $NAME-docker-${ENV}
 
 if [[ "$ENV" == "prod" ]] || [[ "$ENV" == "test" ]] || [[ "$ENV" == "dev" ]]; then
 		echo -e ""
@@ -357,7 +574,7 @@ if [[ "$ENV" == "prod" ]] || [[ "$ENV" == "test" ]] || [[ "$ENV" == "dev" ]]; th
 		title "1.3" "Docker host search"
 		get_running_docker
 
-		read -p "$(italics "?? Choose docker-compose.yml method $(faint "[docker_host)|github]"): ")" method
+		read -p "$(italics "?? Choose docker-compose.yml method $(faint "[docker_host|github]"): ")" method
 		method=${method:-docker_host}
 		blue "$method"
 		case $method in 
@@ -383,37 +600,14 @@ if [[ "$ENV" == "prod" ]] || [[ "$ENV" == "test" ]] || [[ "$ENV" == "dev" ]]; th
 		echo ""
 
 elif [[ "$ENV" == local ]];then
-		get_running_docker
+		ask_docker_host
 		if ! [[ -f ../docker-compose.yml ]]; then
 				echo "There is no current docker-compose.yml file for \"$NAME\" in $(pwd)"
-				read -p "$(italics "?? Choose docker-compose.yml method $(faint "[docker_host|gitlab|manual]"): ")" method
-				method=${method:-docker_host}
-				case $method in 
-					gitlab )
-						read -p "$(italics "?? If $NAME is hosted on gitlab.abes.fr, you can download your docker-compose.yml $(faint "(y/n)").......................................?")" rep
-						if [[ "$rep" == "y" ]];then
-							read -p "$(italics "?? Please provide your gitlab private token (leave empty if public repo):....................................... ")" token
-							ID=$(curl -s --header "PRIVATE-TOKEN: $token" https://git.abes.fr/api/v4/projects | \
-							jq -r --arg name "$NAME" '.[] | select(.name==$name)| .id')
-							curl -s --header "PRIVATE-TOKEN: $token" https://git.abes.fr/api/v4/projects/${ID}/repository/files/docker-compose.yml/raw?ref=main > docker-compose.yml
-							vi docker-compose.yml
-						else
-							echo "Can't continue... You may previously manually copy your \"docker-compose.yml\" and \".env\" file into $pwd"
-							exit 1
-						fi ;;
-					docker_host ) 
-						echo "Fetching \"docker-compose.yml\" from $docker_host .......................................";  \
-						read -p "$(italics "?? Enter docker-compose.yml path on host \"$docker_host\" $(faint "[/opt/pod/$NAME-docker]"): ")" path
-						path=${path:-/opt/pod/$NAME-docker}
-						rsync -a root@$docker_host:$path/docker-compose.yml . ; \
-						fetch "docker-compose.yml"
-						echo "";;
-					manual )
-						echo "Please manually copy the docker-compose.yml to $PWD and re-execute this script"
-						exit;;
-				esac
+				echo "Please manually copy the docker-compose.yml to $PWD and re-execute this script"
+				exit
 			else
-				cat ../docker-compose.yml |egrep -i "^$NAME$"
+				rsync  ../docker-compose.yml .
+				cat docker-compose.yml |grep "$NAME" > /dev/null
 				if [ "$?" == 0 ];
 					then
 						echo "\"docker-compose.yml\" is already present and ready to be used for \"$NAME\".... "
@@ -425,23 +619,14 @@ elif [[ "$ENV" == local ]];then
 				fi
 		fi
 
-		if ! [[ -f ../.env ]];then
-			echo "Choose \".env\" method [docker_host|manual]: " method
-			method=${method:-docker_host}
-			case $method in 
-				docker_host )
-						echo "Fetching \".env\" from $docker_host .......................................";  \
-						read -p "$(italics "?? Enter docker-compose.yml path on host \"$docker_host\" $(faint "[/opt/pod/$NAME-docker]]"): ")" path
-						path=${path:-/opt/pod/$NAME-docker}
-						rsync -a root@$docker_host:$path/.env . ; \
-						fetch ".env"
-						echo "";;
-				manual )
-						echo "Please manually provide a valid \".env\" file in the same directory as docker-compose.yml file ($PWD)"
-						exit 1;;
-			esac
+		if ! [[ -f ../.env ]]
+			then
+				echo "There is no current \".env\" file for \"$NAME\" in $(pwd)"
+				echo "Please manually provide a valid \".env\" file in the same directory as docker-compose.yml file ($PWD)"
+				exit 1
 			else
-				cat ../.env |egrep -i "^$NAME$"
+				rsync ../.env .
+				cat .env |grep "$NAME" > /dev/null
 				if [ "$?" == 0 ];
 					then
 						echo "\".env\" is already present and ready to be used for \"$NAME\".... "
@@ -453,7 +638,7 @@ elif [[ "$ENV" == local ]];then
 		fi
 
 elif [[ "$ENV" != "local" ]]; then
-		echo "Valid verbs are 'github' or 'local'"
+		echo "Valid verbs are 'dev', 'test', 'prod' or 'local'"
 		exit 1;
 elif ! test -f .env || ! test -f docker-compose.yml; then
 		echo -e "No valid files have been found\nCopy your '.env' and your 'docker-compose.yml in $PWD'";
@@ -477,6 +662,31 @@ if test -f .env;
 		done
 fi
 
+if  [ "$VARS_TYPE" = "copy" ];
+	then
+		is_deploy=$(oc get deploy -o json|jq '(if .items==[] then false else true end)')
+		if [ "$is_deploy" = "false" ]
+			then
+				PROVIDER=openshift
+		fi
+		ask_docker_host
+		docker-compose config -o compose.yml
+		copy_to_okd bind compose.yml
+		copy_to_okd volume compose.yml
+		rm -f compose.yml
+		read -p "$(italics "?? Reloading pods to launch \"$NAME\" $(faint "[y]") : ?")" yn
+		yn=${yn:-y}
+		case $yn in
+			[Yy]* )    
+				echo "Restart all $NAME pods......................................." 
+				oc rollout restart deploy
+				timeout 10 oc get pods -w;;
+			[Nn]* )
+				echo "You should manually relaod pods before \"$NAME\" being up by typing \"oc rollout restart deploy\"";;
+		esac
+		exit
+fi
+
 echo -e "\n"
 
 step "2" "Conversion des variables en objet secrets et configMaps"
@@ -495,7 +705,50 @@ docker-compose config --format json | yq -o json \
 											| sed 's/\.svc//g'> $NAME.yml
 message
 
-title "2.2" "Cleaning of $NAME.yml"
+title "2.2" "Buiding images if directives are present"
+
+build_services=$(cat $NAME.yml | yq -o json|jq -r '.services|to_entries[]|select(.value|has("build")).value.container_name')
+if ! [ -z "$build_services" ]
+	then
+		echo -e "${YELLOW}!!Build directives have been detected!!${ENDCOLOR}"
+		echo "This services have some directives to build images:"
+		echo "$build_services"
+		read -p "$(italics "?? Which method do you want to build images with ? [buildConfig|local_docker]: ")" provider
+		provider=${provider:-buildConfig}
+		echo ''
+		docker_login
+		if [[ "$provider" = "buildConfig" ]]; 
+			then
+				echo -e "You will use $(blue \"deploymentConfig API\")"						
+				echo "Cloning $NAME-docker......"
+				read -p "$(italics "?? Enter the Github namespace of $NAME-docker? [abes-esr]: ")" gh_namespace
+				gh_namespace=${gh_namespace:-abes-esr}
+				read -p "$(italics "?? Enter the Github branch of $NAME-docker? [develop]: ")" gh_branch
+				gh_branch=${gh_branch:-develop}
+				rm -f docker-compose.yml
+				git init -q
+				git remote add origin https://github.com/$gh_namespace/$NAME-docker.git
+				git pull origin $gh_branch --allow-unrelated-histories
+				git checkout $gh_branch
+				# git submodule update --init --recursive
+				BUILD_ARGS="--build build-config"
+				PROVIDER=openshift
+			else
+				echo -e "You will use $(blue \"deployment API\")"
+				read -p "$(italics "?? Do you want to use imageStream with deployment API............$(faint "[y]"): ")" is
+				is=${is:-y}
+				build_image
+				message
+				docker logout
+				PROVIDER=kubernetes
+		fi
+		rm -f $registry_cert
+	else
+		blue "No building instruction, going on ..."
+fi
+
+
+title "2.3" "Cleaning of $NAME.yml"
 
 cat $NAME.yml \
 			| yq -ojson \
@@ -513,10 +766,10 @@ cat $NAME.yml \
 
 message
 
+CLEANED="$NAME.yml"
+
 #### insertion de la clé "secrets" dans chacun des services de docker-compose.yml
 #### prend en paramètre le nom du fichier docker-compose.yml
-
-CLEANED="$NAME.yml"
 
 if [ -n "$VARS_TYPE" ] && [ "$VARS_TYPE" == 'env_file' ]
 	then
@@ -547,7 +800,7 @@ if [ -n "$VARS_TYPE" ] && [ "$VARS_TYPE" == 'env_file' ]
 		########### Conversion du environment en env_file ############
 
 		# Génération des {service}.env à partir du docker-compose.yml
-		title "2.3" "Generation of \${services}.env"
+		title "2.4" "Generation of \${services}.env"
 		for i in $(cat $CLEANED|yq eval -ojson|jq -r --arg var "$i" '.services|to_entries|map(select(.value.environment != null)|.key)|flatten[]'); \
 			do 	cat $CLEANED | \
 				yq eval - -o json |\
@@ -570,17 +823,54 @@ if [ -n "$VARS_TYPE" ] && [ "$VARS_TYPE" == 'env_file' ]
 			done 
 
 		# Déclaration des {services.env} dans docker-compose.yml
-		title "2.4" "Declaration of \${services}.env into deployments"
+		title "2.5" "Declaration of \${services}.env into deployments"
 		for i in $(cat $CLEANED|yq eval -ojson|jq -r --arg var "$i" '.services|to_entries|map(select(.value.environment != null)|.key)|flatten[]'); \
 			do echo $i; cat $CLEANED | \
 						yq eval - -o json | \
 						jq -r  --arg var "$i" '.services[$var]."env_file" = $var +".env"' | \
+						yq -P |
 						sponge $CLEANED ; \
 			done
 		message
 
-	# Suppression des environnements et nettoyage final
-	title "2.5" "Cleaning"
+		# 
+		title "2.6" "Check mem_limit"
+		for i in $(cat $CLEANED | yq -o json| jq -r '.services|keys|.[]')
+			do 
+				MEM_LIMIT=$(cat $CLEANED | yq -o json| jq -r --arg i "$i" '.services|to_entries[]|.value|select(.container_name=="\($i)").mem_limit')
+				if [ "$MEM_LIMIT" > 2147483648 ]
+					then 
+						echo -e "${YELLOW}!! Warning !!${ENDCOLOR}: service $(blue \"$i\") will lock $(blue $(calc "int($MEM_LIMIT / (1024*1024*1024) )")) GiB of RAM on worker."
+						read -p "$(italics "?? Worker nodes may not be able to schedule concerned pods. Please enter a lower limit in GiB $(faint "(0 for no limit, empty for current limit)"): ")" LIMIT
+						limit=${LIMIT:-$MEM_LIMIT}
+						if ! [ "$limit" = "$MEM_LIMIT" ]; 
+							then
+								limit=$(calc "int($limit * (1024*1024*1024))")
+						fi
+						if [ "$limit" = 0 ]
+							then
+								cat $CLEANED |
+								yq -o json|
+								jq --arg limit "$limit" --arg i "$i" '.services|=with_entries( if .value.container_name=="\($i)" 
+																							then del(.value."mem_limit")|del(.value."memswap_limit")
+																							else . 
+																						end)' | \
+								sponge $CLEANED
+							else
+								cat $CLEANED | 
+								yq -o json| 
+								jq --arg limit "$limit" --arg i "$i" '.services|=with_entries( if .value.container_name=="\($i)" 
+																								then .value.mem_limit="\($limit)" 
+																								else . 
+																							end)' | \
+								sponge $CLEANED
+						fi
+				fi
+			done
+		message
+
+	# Suppression des environnements et nettoyage
+	title "2.7" "Cleaning"
 	cat $CLEANED \
 	| jq 'del (.services[].environment)' \
 	| jq 'del(.networks)' \
@@ -633,7 +923,7 @@ patch_expose () {
 	echo "You may define them one by one so as the conversion to be successfull"
 	for service in $services; 
 		do 
-			read -p "$(italics "?? $service: Enter port number to expose the service $(faint "(press to leave empty)"): ")" port
+			read -p "$(italics "?? $(blue $service): Enter port number to expose the service $(faint '(press to leave empty)'): ")" port
 			if [[ -n $service ]]
 				then
 					if [[ -n $port ]]
@@ -685,13 +975,47 @@ patch_secretKeys () {
 
 # Patch networkpolicy to allow ingress
 	patch_networkPolicy () {
-	echo "patching ingress in $NAME-docker-$ENV-default-networkpolicy.yaml......................................."
 	NETWORK=$(ls | grep networkpolicy)
-	cat $NETWORK | 
-		yq eval -ojson | 
-		jq '.spec.ingress|=
-				map(.from |= .+ [{"namespaceSelector":{"matchLabels":{ "policy-group.network.openshift.io/ingress": ""}}}])'|
-		yq eval -P | sponge $NETWORK
+	if ! [ -z "$NETWORK" ]
+		then 
+			echo "patching ingress in $NAME-docker-$ENV-default-networkpolicy.yaml......................................."
+			cat $NETWORK |	yq eval -ojson | 
+			jq '.spec.ingress|=
+					map(.from |= .+ [{"namespaceSelector":{"matchLabels":{ "policy-group.network.openshift.io/ingress": ""}}}])'|
+			yq eval -P | sponge $NETWORK
+		else
+			blue "Nothing to do"	
+	fi	
+}
+
+select_sc() {
+	default_sc=$(oc get sc -o json | jq -r '.items[]|select(.metadata.annotations|has("storageclass.kubernetes.io/is-default-class")).metadata.name')
+	echo "You are about to deploy \"$NAME\" with the default storageClass \"$default_sc"\"
+	read -p "$(italics "?? Would you like to use a different storageClass?....[n]: ")" yn
+	yn=${yn:-n}
+	while true; do
+		case $yn in
+			[Yy]* )	
+				echo "Here are available storageClasses:"
+				oc get sc
+				read -p "$(italics "?? Enter the default storageClass you want to use for your project \"$NAME\": ")" SC
+				# SC=${SC:-$default_sc}
+				break;;
+			[Nn]* )
+				echo "Going on with \"$default_sc\""
+				break;;
+		esac
+	done
+}
+
+define_sc() {
+	if ! [ -z  "$SC" ]; then
+	for i in $(ls | grep claim | grep -v "nfs")
+		do
+			echo "patching new default storageClass $SC in $i ......................................."
+			cat $i | yq -o json | jq --arg SC "$SC" '.spec+={"storageClassName": "\($SC)"}' | yq -P | sponge $i
+		done
+	fi
 }
 
 create_pv2() {
@@ -705,6 +1029,10 @@ nfs_mount_points=$(ssh root@$docker_host mount | \
 					  server: .filesystem|split(":")|first
 					 }' \
 				 )
+if ! [ -z "$nfs_mount_points" ]
+	then
+		echo "No NFS mountpoint detected into \"$NAME\" project"
+fi
 
 for i in $(echo $nfs_mount_points|jq -r '."mount_point"|split("/")|last')
     do 
@@ -792,10 +1120,10 @@ patch_deploy_nfs() {
 
 	oldname=$i-claim${index}
 	newname="$i-claim${index}-nfs-${namespace}-$ENV"
-	cat $i-deployment.yaml | yq -ojson | \
+	cat $i-deployment*.yaml | yq -ojson | \
 							jq --arg newname "$newname" --arg oldname "$oldname" --arg subpath "$subpath" \
 							'(.spec.template.spec.containers[0].volumeMounts[]|select(.name=="\($oldname)"))+= ({subPath:"\($subpath)"}|.name|="\($newname)")|
-							 (.spec.template.spec.volumes[]|select(.name=="\($oldname)"))|=(.name|="\($newname)"|.persistentVolumeClaim.claimName|="\($newname)")' | yq -P | sponge $i-deployment.yaml
+							 (.spec.template.spec.volumes[]|select(.name=="\($oldname)"))|=(.name|="\($newname)"|.persistentVolumeClaim.claimName|="\($newname)")' | yq -P | sponge $i-deployment*.yaml
 }
 
 patch_configmaps() {
@@ -803,7 +1131,7 @@ patch_configmaps() {
 	 for i in $(ls | grep "deployment")
 	 	do 
 			echo "patching configMaps in $i ......................................."
-			claims=$(cat $i | yq -ojson| jq -r '.spec.template.spec.containers[].volumeMounts[]?|select((.mountPath|test("(\\.[^.]+)$")) and (.name|test("claim"))).name')
+			claims=$(cat $i | yq -ojson| jq -r '.spec.template.spec.containers[].volumeMounts[]?|select((.mountPath|split("/")|last|test("(\\.[^.]+)$")) and (.name|test("claim"))).name')
 
 			for j in $claims
 				do 
@@ -814,20 +1142,20 @@ patch_configmaps() {
 					sponge $i
 				done
 
-			services=$(cat $i | yq -ojson| jq -r '.spec.template.spec.containers[].volumeMounts[]?|select((.mountPath|test("(\\.[^.]+)$")) and (.name|test("claim")))|(.name|split("-claim")|.[0]) + "-" + (.mountPath|split("/")|last|gsub("_";"-")|gsub("\\.";"-")|ascii_downcase)')
+			services=$(cat $i | yq -ojson| jq -r '.spec.template.spec.containers[].volumeMounts[]?|select((.mountPath|split("/")|last|test("(\\.[^.]+)$")) and (.name|test("claim")))|(.name|split("-claim")|.[0]) + "-" + (.mountPath|split("/")|last|gsub("_";"-")|gsub("\\.";"-")|ascii_downcase)')
 
 			for j in $services
 				do cat $i | yq -ojson| \
-					jq -r --arg j $j '((.spec.template.spec.containers[].volumeMounts[]?|select((.mountPath|test("(\\.[^.]+)$")) and (.name|test("claim")) )) |= {mountPath: .mountPath, name: ((.name|split("-claim")|.[0]) + "-" + (.mountPath|split("/")|last|gsub("_";"-")|gsub("\\.";"-")|ascii_downcase)), subPath: (.mountPath|split("/")|last)})|.spec.template.spec.volumes+=[{configMap: {defaultMode: 420, name: $j}, name: $j}]' | \
+					jq -r --arg j $j '((.spec.template.spec.containers[].volumeMounts[]?|select((.mountPath|split("/")|last|test("(\\.[^.]+)$")) and (.name|test("claim")) )) |= {mountPath: .mountPath, name: ((.name|split("-claim")|.[0]) + "-" + (.mountPath|split("/")|last|gsub("_";"-")|gsub("\\.";"-")|ascii_downcase)), subPath: (.mountPath|split("/")|last)})|.spec.template.spec.volumes+=[{configMap: {defaultMode: 420, name: $j}, name: $j}]' | \
 					sponge $i 
 				done 
 		done
 }
 
 create_configmaps() {
-	CM=$(cat $NAME.yml | yq -o json | jq -r --arg pwd "$NAME-docker-$ENV" '.services[].volumes|select(.!=null)|.[]|select(.type == "bind")|select(.source|test("(\\.[^.]+)$"))|select(.source|test("sock")|not).source|split($pwd)|.[1]?')
-	CM_RENAMED=$(cat $NAME.yml | yq -o json | jq -r --arg pwd "$NAME-docker-$ENV" '.services|to_entries[]|{name: .key, volumes: (.value|.volumes|select(.!=null)|.[]|select(.type == "bind")|select(.target|test("(\\.[^.]+)$"))|select(.target|test("sock")|not).target|split("/")|last)}|(.name + "-" + (.volumes|split("/")|last|gsub("\\/";"-")|gsub("\\.";"-")|gsub("\\_";"-")|ascii_downcase))')
-	CM_RENAMED_short=$(cat $NAME.yml | yq -o json | jq -r --arg pwd "$NAME-docker-$ENV" '.services|to_entries[]|{name: .key, volumes: (.value|.volumes|select(.!=null)|.[]|select(.type == "bind")|select(.target|test("(\\.[^.]+)$"))|select(.target|test("sock")|not).target|split("/")|last)}|((.volumes|split("/")|last))')
+	CM=$(cat $NAME.yml | yq -o json | jq -r --arg pwd "$NAME-docker-$ENV" '.services[].volumes|select(.!=null)|.[]|select(.type == "bind")|select(.source|split("/")|last|test("(\\.[^.]+)$"))|select(.source|test("sock")|not).source|split($pwd)|.[1]?')
+	CM_RENAMED=$(cat $NAME.yml | yq -o json | jq -r --arg pwd "$NAME-docker-$ENV" '.services|to_entries[]|{name: .key, volumes: (.value|.volumes|select(.!=null)|.[]|select(.type == "bind")|select(.target|split("/")|last|test("(\\.[^.]+)$"))|select(.target|test("sock")|not).target|split("/")|last)}|(.name + "-" + (.volumes|split("/")|last|gsub("\\/";"-")|gsub("\\.";"-")|gsub("\\_";"-")|ascii_downcase))')
+	CM_RENAMED_short=$(cat $NAME.yml | yq -o json | jq -r --arg pwd "$NAME-docker-$ENV" '.services|to_entries[]|{name: .key, volumes: (.value|.volumes|select(.!=null)|.[]|select(.type == "bind")|select(.target|split("/")|last|test("(\\.[^.]+)$"))|select(.target|test("sock")|not).target|split("/")|last)}|((.volumes|split("/")|last))')
 
 
 	declare -a tab_CM
@@ -883,31 +1211,88 @@ patch_labels() {
 		done
 }
 
+patch_api() {
+	if [[ "$1" = "apps" ]]
+		then
+			api_type=deploymentconfig
+		else
+			api_type=$1
+	fi
+	for i in $(ls |egrep $api_type.*yaml)
+		do 
+			echo "patching $1 api in $i ............"
+			cat $i | yq -o json | jq --arg arg "$1" '.apiVersion="\($arg).openshift.io/v1"' | \
+			yq -P | \
+			sponge $i
+		done
+}
+
+patch_bc() {
+	for i in $(ls | egrep \*build* )
+		do
+			echo "patching Docker secret for pulling images in $i ..........." 
+			cat $i| yq -ojson | jq '.spec.strategy.dockerStrategy+={pullSecret:{name: "docker.io"}}' | \
+			yq -P | \
+			sponge $i
+		done
+}
+
+get_okd_token() {
+	USER=$1
+	PASSWD=$2
+	ENDPOINT=$(oc get route -n openshift-authentication oauth-openshift  -o json|jq -r '.spec.host')
+	TOKEN=$(curl -s -u $USER:$PASSWD -kI "https://$ENDPOINT/oauth/authorize?client_id=openshift-challenging-client&response_type=token" | grep -oP "access_token=\K[^&]*")
+}
+
+imagestream_use() {
+
+if [ "$provider" != "buildConfig" ]
+	then
+		SERVICES=$(cat $NAME.yml | yq -ojson |jq -r '.services|keys[]')
+		for SERVICE in $SERVICES
+			do
+				IMAGE=$(cat $NAME.yml|yq -ojson |jq --arg service "$SERVICE" -r '.services|to_entries[]|select(.value.container_name==$service).value.image')
+				deploy_manifest=$(ls | grep "${SERVICE}-deployment\.")
+				if [ "$is" = "n" ]
+					then
+						echo "removing use of imagestream into $deploy_manifest"
+						has_build=$(cat $NAME.yml | yq -o json|jq -r --arg service "$SERVICE" '.services|to_entries[]|select(.value."container_name"=="\($service)")|.value|has("build")')
+						if [ "$has_build" = "true" ]
+							then 
+								cat $deploy_manifest | yq -ojson | \
+													jq --arg namespace "$namespace" --arg IMAGE "$IMAGE" '.spec.template.spec.containers[0].image|="image-registry.openshift-image-registry.svc:5000/\($namespace)/\($IMAGE)"' | \
+														yq -P | sponge $deploy_manifest
+						fi
+					else
+						echo "using imagestream with $deploy_manifest ...................."
+						istag_name=$(cat $NAME.yml | yq -ojson | jq  -r --arg IMAGE "$IMAGE" '.services|to_entries[]|.value|select(.image==$IMAGE)|(.container_name + ":" + (.image|split(":")|last))')
+						cat $deploy_manifest | yq -ojson | \
+											jq --arg namespace "$namespace" --arg istag_name "$istag_name" '.spec.template.spec.containers[0].image|="\($istag_name)"' | \
+												yq -P | sponge $deploy_manifest
+				fi
+			done
+fi
+}
 
 #Génération des manifests
 step "3" "Docker-compose.yml conversion into Kubernetes manifests with the Kompose tool"
 
+title "3.1" "Defining storageClass to use"
+select_sc
 
-title "3.1" "Creating missing network manifests"
+title "3.2" "Creating missing network manifests"
 services=$(cat $CLEANED | yq -o json| jq -r '.services|to_entries[]|.value|select((has("ports") or has("expose"))|not)?|."container_name"')
 if [[ -n $services ]]
 	then
 		echo -e "The following services don't have any explicit defined ports: \n$services"
-		read -p "$(italics "?? Do you want to fetch ports from existing docker containers on $docker_host : $(faint "[y]")")" yn
-		yn=${yn:-y}
-		while true; do
-			case $yn in
-				[Yy]* )	
-					patch_expose_auto
-					break;;
-				[Nn]* )
-					patch_expose
-					break;;
-			esac
-		done
+		prod_test_dev patch_expose_auto
+		if [ "$?" != 7 ]; 
+			then
+				patch_expose
+		fi
 fi
 
-read -p "$(italics "?? Is this correct to be deployed? $(faint "[y]")............: ")" yn
+read -p "$(italics "?? Is this correct to be deployed? ............$(faint "[y]"): ")" yn
 yn=${yn:-y}
 case $yn in
 	[Yy]* )	blue "Converting \"docker-compose.yml\" into k8s manifests..."
@@ -921,29 +1306,35 @@ applis_svc=$(cat $NAME.yml | yq eval -ojson | \
 applis_source=$(cat $NAME.yml | yq eval -ojson | \
     jq -r '.services|to_entries[]| [{services: .key, volumes: .value.volumes[]|select(.source|test("/appli"))}]?|.[].volumes.source')
 if [ -n "$KOMPOSE" ] && [ "$KOMPOSE" = "kompose" ]; then
-	title "3.2" "Generation of manifests with Kompose"
+	title "3.3" "Generation of manifests with Kompose"
 	if [ -n "$HELM" ] && [ "$HELM" = "helm" ]; then  
-		kompose -f $CLEANED convert -c
+		kompose -f $CLEANED convert -c --provider $PROVIDER $BUILD_ARGS
 		cd $NAME/templates
 	else
-		kompose -f $CLEANED convert
+		kompose -f $CLEANED convert --provider $PROVIDER $BUILD_ARGS
 	fi
 	patch_RWO
-	title "3.2.1" "Patching secret manifests"
+	title "3.3.1" "Patching secret manifests"
 	patch_secret
 	patch_secretKeys
-	title "3.2.2" "Patching network manifests"
+	title "3.3.2" "Patching network manifests"
 	patch_networkPolicy $ENV
-	title "3.2.3" "Patching storage manifests"
-	create_pv2 $ENV $NAME
-	title "3.2.4" "Patching file manifests"
+	title "3.3.3" "Patching storage manifests"
+	prod_test_dev create_pv2 $ENV $NAME
+	define_sc
+	title "3.3.4" "Patching file manifests"
+	imagestream_use
 	patch_configmaps $CLEANED
-	patch_labels	
+	patch_labels
+	patch_api build
+	patch_api image
+	patch_api apps
+	patch_bc
 	# Création des object configMaps pour les volumes bind qui sont des fichiers et non des répertoires"
-	create_configmaps $ENV
+	prod_test_dev create_configmaps $ENV
 fi
 
-title "3.3" "Patching multi-attached volumes"
+title "3.4" "Patching multi-attached volumes"
 # find targeted volumes 
 export volumes=$(cat $CLEANED | yq eval -o json | jq -r '.services|to_entries[]|.value|select(has("volumes"))|.volumes[]|select((.type)=="volume").source'|uniq)
 
@@ -1049,9 +1440,9 @@ for i in $volumes
 copy_to_okd () {
 if [[ $1 = "bind" ]]
 	then
-		SOURCES=$(cat $NAME.yml | yq -ojson | jq -r --arg type $1 --arg DIR "${PWD##*/}" '(.services[].volumes[]?|select(.type=="\($type)")|select(.source|test("home|root")))|={source: .source|split("\($DIR)")|.[1], type: .type, target: .target}|del (.services[].volumes[]?|select(.source|test("sock")))| del (.services[].volumes[]?|select(.source|test("/applis")))|.services|to_entries[]|{sources: (.key + ":." + (.value|select(has("volumes")).volumes[]|select(.type=="\($type)")|select(.source!=null)|select(.source|test("(\\.[^.]+)$")|not)|.source))}|.sources')
+		SOURCES=$(cat $2 | yq -ojson | jq -r --arg type $1 --arg DIR "${PWD##*/}" '(.services[].volumes[]?|select(.type=="\($type)")|select(.source|test("home|root")))|={source: .source|split("\($DIR)")|.[1], type: .type, target: .target}|del (.services[].volumes[]?|select(.source|test("sock")))| del (.services[].volumes[]?|select(.source|test("/applis")))|.services|to_entries[]|{sources: (.key + ":." + (.value|select(has("volumes")).volumes[]|select(.type=="\($type)")|select(.source!=null)|select(.source|split("/")|last|test("(\\.[^.]+)$")|not)|.source))}|.sources')
 	else
-		SOURCES=$(cat $NAME.yml | yq -ojson | jq -r --arg type $1 '(.services[].volumes[]?|select(.type=="\($type)")|select(.source|test("home|root")))|={source: .source, type: .type, target: .target}|del (.services[].volumes[]?|select(.source|test("sock")))| del (.services[].volumes[]?|select(.source|test("/applis")))|.services|to_entries[]|{sources: (.key + ":" + (.value|select(has("volumes")).volumes[]|select(.type=="\($type)")|select(.source!=null)|select(.source|test("(\\.[^.]+)$")|not)|.source))}|.sources')
+		SOURCES=$(cat $2 | yq -ojson | jq -r --arg type $1 '(.services[].volumes[]?|select(.type=="\($type)")|select(.source|test("home|root")))|={source: .source, type: .type, target: .target}|del (.services[].volumes[]?|select(.source|test("sock")))| del (.services[].volumes[]?|select(.source|test("/applis")))|.services|to_entries[]|{sources: (.key + ":" + (.value|select(has("volumes")).volumes[]|select(.type=="\($type)")|select(.source!=null)|select(.source|split("/")|last|test("(\\.[^.]+)$")|not)|.source))}|.sources')
 fi
 if [ -n "$SOURCES" ]
 	then 
@@ -1063,7 +1454,6 @@ if [ -n "$SOURCES" ]
 		declare -a tab2
 		declare -a tab3
 		declare -a tab4
-		calc(){ awk "BEGIN { print $*}"; }
 		for i in $SOURCES; 
 			do 
 				SVC=$(echo $i | cut -d':' -f1)
@@ -1093,7 +1483,7 @@ if [ -n "$SOURCES" ]
 				fi
 
 				echo "$SVC:$(blue ${tab2[$index]})"
-				tab3[$index]=$(cat $NAME.yml | yq eval -ojson| jq -r --arg size "${tab2[$index]}" --arg svc "$SVC" --arg src "$SRC" '.services |to_entries[] | select(.value.volumes | to_entries[] |.value.source | test("\($src)$"))?|select(.key=="\($svc)")|.value.volumes|=map(select(.source|test("\($src)$"))|with_entries(select(.key="source"))|.source="\($src)"|.size="\($size)")'|jq -s '.[0]|del(..|nulls)')
+				tab3[$index]=$(cat $2 | yq eval -ojson| jq -r --arg size "${tab2[$index]}" --arg svc "$SVC" --arg src "$SRC" '.services |to_entries[] | select(.value.volumes | to_entries[] |.value.source | test("\($src)$"))?|select(.key=="\($svc)")|.value.volumes|=map(select(.source|test("\($src)$"))|with_entries(select(.key="source"))|.source="\($src)"|.size="\($size)")'|jq -s '.[0]|del(..|nulls)')
 				echo -e "\n"
 			done
 
@@ -1153,7 +1543,7 @@ if [ -n "$SOURCES" ]
 										do
 											echo "Waiting for pvc to be ready...."
 											status=$(oc get pvc $file_name -o json | jq -r '.status.phase')
-											sleep 5
+											sleep 1
 										done
 
 									is_nfs=$(oc get pvc $file_name -o json | jq -r '.spec.storageClassName|test("nfs")')
@@ -1202,14 +1592,30 @@ if [ -n "$SOURCES" ]
 							echo -e "$service:\nPaste those commands to copy data:"
 							echo -e "${YELLOW}from${ENDCOLOR} ${docker_host}:${src}/ ${YELLOW}to${ENDCOLOR} persistent volume ($size):\n"
 							blue "mkdir /root/.ssh && echo \"$private_key\" > /root/.ssh/id_rsa && chmod 600 -R /root/.ssh; \
-if [ \"\$(cat /etc/os-release|grep "alpine")\" = '' ]; \
+if [ \"\$(cat /etc/os-release|grep "debian")\" != '' ]; \
 then apt update && apt install rsync openssh-client -y;  \
+elif [ \"\$(cat /etc/os-release|grep rhel)\" != '' ]; \
+then yum -y install openssh-clients rsync; \
 else apk update && apk -f add rsync openssh-client-default openssh-client; fi; \
-rsync -av -e 'ssh -o StrictHostKeyChecking=no' ${docker_host}:${src}/ ${target}/; \
+rsync -a --info=progress2 -e 'ssh -o StrictHostKeyChecking=no' ${docker_host}:${src}/ ${target}/; \
 exit"
 							echo "###########################################################################"
-							POD=$(oc get pods -o json| jq -r --arg service "$service" '.items[]|.metadata|select(.name|test("\($service)-[b-df24-9]+-[b-df-hj-np-tv-z24-9]{5}"))|.name')
+							# while [ "$pod_status" != "Running" ] && [ -n "$file_name" ]
+							while [ "$pod_status" != "Running" ]
+								do
+									if [ "$PROVIDER" = "kubernetes" ] || [ "$PROVIDER" = "" ]
+										then 
+											POD=$(oc get pods -o json| jq -r --arg service "$service" '.items[]|.metadata|select(.name|test("\($service)-[b-df24-9]+-[b-df-hj-np-tv-z24-9]{5}"))|.name')
+										else
+											POD=$(oc get pods -o json| jq -r --arg service "$service" '.items[]|.metadata|select(.name|test("\($service)-[1-9]+-[b-df-hj-np-tv-z24-9]{5}"))|.name')
+									fi
+									echo "Waiting for $(blue \"$service\") pod to be in running state...."
+									pod_status=$(oc get pod $POD -o json | jq -r '.status.phase')
+									sleep 5
+								done
+							echo "oc debug $POD --as-root=true"
 							oc debug $POD --as-root=true
+							pod_status=""
 						fi
 					done
 		fi
@@ -1248,56 +1654,39 @@ if [[ "$answer" == "y" ]];
 				exit 1
 			else
 				release_pv $NAME
-				while true; do
-					read -p "$(italics "?? Would you like to create a new project? (y/n)....................................$(faint "[y]")"): " yn
-					yn=${yn:-y}
-					case $yn in
-						[Yy]* )                         
-							read -p "$(italics "?? Enter the name of the project $(faint "[$namespace]")....................................:") " project
-							project=${project:-$namespace}
-							oc new-project $project
-							echo -e "Setting SCC anyuid to default SA.......................................\n"
-							oc adm policy add-scc-to-user anyuid -z default
-							read -p "$(italics "?? Do you want to authenticate against DockerHub? $(faint "[n]")"): " ynyn
-							ynyn=${ynyn:-n}
-							case $ynyn in
-								[Yy]* ) 
-									read -p "$(italics "?? DockerHub server $(faint "[docker.io]")"): " dh_server
-									dh_server=${dh_server:-docker.io}
-									read -p "$(italics "?? DockerHub username" ): " dh_user
-									read -p "$(italics "?? DockerHub password" ): " dh_passwd
-									echo -e "Creation of docker secret for pulling images without restriction.......................................\n"
-									oc create secret docker-registry docker.io --docker-server=${dh_server} --docker-username=${dh_user} --docker-password=${dh_passwd}
-									oc secrets link default docker.io --for=pull
-									echo -e "\n"
-									;;
-							esac
-
-							break;;
-						[Nn]* )
-							break;;
-						* ) echo "Please answer yes or no.";;
-					esac
-				done
-
+				if [ -z "$build_services" ]
+					then
+						docker_login docker.io
+				fi
 				read -p "$(italics "?? Ready to deploy $name. Press \"Enter\" to begin.......................................")" answer
 				oc apply -f "*.yaml*"
+				if [[ "$provider" != "buildConfig" ]]
+					then 
+						oc_tag_image
+				fi
 				echo -e "\n"
 				oc get pods
 				echo -e "\n"
+				if [ "$ENV" = "local" ];
+					then
+						read -p "Do you want to sync Docker volumes with k8s PVCs? [n]: " yn
+						yn={yn:-n}
+						if [ "$yn" = "n" ]
+							then 
+								echo "You can sync later with this command: $(blue \"./compose2manifests.sh $1 $2 copy\")"
+								exit
+						fi
+				fi
 				step "5" "Copy of persistent volumes"
 				title "5.1" "Copy data to pvc of type bind"
-				copy_to_okd bind
+				copy_to_okd bind $CLEANED
 				title "5.2" "Copy data to pvc of type volume"
-				copy_to_okd volume
+				copy_to_okd volume $CLEANED
 				echo -e "\n"
 		fi
 	else
-		step "5" "Copy of persistent volumes"
-		title "5.1" "Copy data to pvc of type bind"
-		copy_to_okd bind
-		title "5.2" "Copy data to pvc of type volume"
-		copy_to_okd volume
+		echo "Bye"
+		exit
 fi
 
 
@@ -1309,7 +1698,12 @@ yn=${yn:-y}
 case $yn in
 	[Yy]* )    
 		echo "Restart all $NAME pods......................................." 
-		oc rollout restart deploy
+		if [ "$PROJECT" = "openshift" ]
+			then
+				for i in $(oc get dc -o json | jq -r '.items[].metadata.name'); do oc rollout latest $i; done
+			else
+				oc rollout restart deploy
+		fi
 		timeout 10 oc get pods -w;;
 	[Nn]* )
 		echo "You should manually relaod pods before \"$NAME\" being up by typing \"oc rollout restart deploy\"";;

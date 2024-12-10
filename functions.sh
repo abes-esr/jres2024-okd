@@ -536,11 +536,12 @@ EOF
 
 #Calcul des tailles des disques persistants
 copy_to_okd () {
+	echo $2
 if [[ $1 = "bind" ]]
 	then
-		SOURCES=$(cat $NAME.yml | yq -ojson | jq -r --arg type $1 --arg DIR "${PWD##*/}" '(.services[].volumes[]?|select(.type=="\($type)")|select(.source|test("home|root")))|={source: .source|split("\($DIR)")|.[1], type: .type, target: .target}|del (.services[].volumes[]?|select(.source|test("sock")))| del (.services[].volumes[]?|select(.source|test("/applis")))|.services|to_entries[]|{sources: (.key + ":." + (.value|select(has("volumes")).volumes[]|select(.type=="\($type)")|select(.source!=null)|select(.source|test("(\\.[^.]+)$")|not)|.source))}|.sources')
+		SOURCES=$(cat $2 | yq -ojson | jq -r --arg type $1 --arg DIR "${PWD##*/}" '(.services[].volumes[]?|select(.type=="\($type)")|select(.source|test("home|root")))|={source: .source|split("\($DIR)")|.[1], type: .type, target: .target}|del (.services[].volumes[]?|select(.source|test("sock")))| del (.services[].volumes[]?|select(.source|test("/applis")))|.services|to_entries[]|{sources: (.key + ":." + (.value|select(has("volumes")).volumes[]|select(.type=="\($type)")|select(.source!=null)|select(.source|test("(\\.[^.]+)$")|not)|.source))}|.sources')
 	else
-		SOURCES=$(cat $NAME.yml | yq -ojson | jq -r --arg type $1 '(.services[].volumes[]?|select(.type=="\($type)")|select(.source|test("home|root")))|={source: .source, type: .type, target: .target}|del (.services[].volumes[]?|select(.source|test("sock")))| del (.services[].volumes[]?|select(.source|test("/applis")))|.services|to_entries[]|{sources: (.key + ":" + (.value|select(has("volumes")).volumes[]|select(.type=="\($type)")|select(.source!=null)|select(.source|test("(\\.[^.]+)$")|not)|.source))}|.sources')
+		SOURCES=$(cat $2 | yq -ojson | jq -r --arg type $1 '(.services[].volumes[]?|select(.type=="\($type)")|select(.source|test("home|root")))|={source: .source, type: .type, target: .target}|del (.services[].volumes[]?|select(.source|test("sock")))| del (.services[].volumes[]?|select(.source|test("/applis")))|.services|to_entries[]|{sources: (.key + ":" + (.value|select(has("volumes")).volumes[]|select(.type=="\($type)")|select(.source!=null)|select(.source|test("(\\.[^.]+)$")|not)|.source))}|.sources')
 fi
 if [ -n "$SOURCES" ]
 	then 
@@ -571,7 +572,12 @@ if [ -n "$SOURCES" ]
 				fi
 
 				echo "Calculating required size for disk claiming from $docker_host......................." 
-				tab1[$index]=$(ssh root@${docker_host} du -s $src | cut -f1) 
+				if [ -n "$docker_host" ]; 
+					then
+						tab1[$index]=$(ssh root@${docker_host} du -s $src | cut -f1 ) 
+					else
+						tab1[$index]=''
+				fi
 				echo "$SRC"
 				echo "$SVC:$(blue ${tab1[$index]})"
 				if [[ ${tab1[$index]} -lt "100000" ]];
@@ -582,7 +588,7 @@ if [ -n "$SOURCES" ]
 				fi
 
 				echo "$SVC:$(blue ${tab2[$index]})"
-				tab3[$index]=$(cat $NAME.yml | yq eval -ojson| jq -r --arg size "${tab2[$index]}" --arg svc "$SVC" --arg src "$SRC" '.services |to_entries[] | select(.value.volumes | to_entries[] |.value.source | test("\($src)$"))?|select(.key=="\($svc)")|.value.volumes|=map(select(.source|test("\($src)$"))|with_entries(select(.key="source"))|.source="\($src)"|.size="\($size)")'|jq -s '.[0]|del(..|nulls)')
+				tab3[$index]=$(cat $2 | yq eval -ojson| jq -r --arg size "${tab2[$index]}" --arg svc "$SVC" --arg src "$SRC" '.services |to_entries[] | select(.value.volumes | to_entries[] |.value.source | test("\($src)$"))?|select(.key=="\($svc)")|.value.volumes|=map(select(.source|test("\($src)$"))|with_entries(select(.key="source"))|.source="\($src)"|.size="\($size)")'|jq -s '.[0]|del(..|nulls)')
 				echo -e "\n"
 			done
 
@@ -599,6 +605,7 @@ if [ -n "$SOURCES" ]
 		done
 
 		volumes=("${templist[@]}")
+		if [ "VARS_TYPE" != "copy" ];then
 		index=0
 		mount_points=$(echo $nfs_mount_points | jq -rs '.[]|.mount_point|split("/")|last')
 
@@ -661,6 +668,7 @@ if [ -n "$SOURCES" ]
 						done
 				fi
 			done
+		fi	
 
 		read -p "$(italics "?? Would you like to copy current data to okd volume of type $1 (may be long)? (y/n).......................................$(faint "[y]")")" answer
 		answer=${answer:-y}
@@ -691,14 +699,30 @@ if [ -n "$SOURCES" ]
 							echo -e "$service:\nPaste those commands to copy data:"
 							echo -e "${YELLOW}from${ENDCOLOR} ${docker_host}:${src}/ ${YELLOW}to${ENDCOLOR} persistent volume ($size):\n"
 							blue "mkdir /root/.ssh && echo \"$private_key\" > /root/.ssh/id_rsa && chmod 600 -R /root/.ssh; \
-if [ \"\$(cat /etc/os-release|grep "alpine")\" = '' ]; \
+if [ \"\$(cat /etc/os-release|grep "debian")\" != '' ]; \
 then apt update && apt install rsync openssh-client -y;  \
+elif [ \"\$(cat /etc/os-release|grep rhel)\" != '' ]; \
+then yum -y install openssh-clients rsync; \
 else apk update && apk -f add rsync openssh-client-default openssh-client; fi; \
-rsync -av -e 'ssh -o StrictHostKeyChecking=no' ${docker_host}:${src}/ ${target}/; \
+rsync -a --info=progress2 -e 'ssh -o StrictHostKeyChecking=no' ${docker_host}:${src}/ ${target}/; \
 exit"
 							echo "###########################################################################"
-							POD=$(oc get pods -o json| jq -r --arg service "$service" '.items[]|.metadata|select(.name|test("\($service)-[b-df24-9]+-[b-df-hj-np-tv-z24-9]{5}"))|.name')
+							# while [ "$pod_status" != "Running" ] && [ -n "$file_name" ]
+							while [ "$pod_status" != "Running" ]
+								do
+									if [ "$PROVIDER" = "kubernetes" ] || [ "$PROVIDER" = "" ]
+										then 
+											POD=$(oc get pods -o json| jq -r --arg service "$service" '.items[]|.metadata|select(.name|test("\($service)-[b-df24-9]+-[b-df-hj-np-tv-z24-9]{5}"))|.name')
+										else
+											POD=$(oc get pods -o json| jq -r --arg service "$service" '.items[]|.metadata|select(.name|test("\($service)-[1-9]+-[b-df-hj-np-tv-z24-9]{5}"))|.name')
+									fi
+									echo "Waiting for $(blue \"$service\") pod to be in running state...."
+									pod_status=$(oc get pod $POD -o json | jq -r '.status.phase')
+									sleep 1
+								done
+							echo "oc debug $POD --as-root=true"
 							oc debug $POD --as-root=true
+							pod_status=""
 						fi
 					done
 		fi
