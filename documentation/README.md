@@ -56,7 +56,7 @@ Cette documentation est donnée à titre d'exemple du travail collaboratif accom
 
 \- [CI/CD avec les API Openshift (buildConfig)](buildConfig.md)
 
-\- [Build initial et CD sur Kubernetes](deloyment.md)
+\- [Build initial et CD sur Kubernetes](deployment.md)
 
 \- [ImageStream](imagestream.md)
 

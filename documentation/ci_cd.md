@@ -1,4 +1,4 @@
-======= CI/CD =======
+# CI/CD #
 
 ## Objectifs
 
@@ -32,8 +32,8 @@ services:
 
 ## CI/CD sur Openshift
 
-[buildConfig#Déploiement avec les APIs natives Openshift](/okd/buildConfig#Déploiement avec les APIs natives Openshift)
+[Déploiement avec les APIs natives Openshift](buildConfig.md)
 
 ## Build initial et CD sur Kubernetes
 
-[deployment#Déploiement sur Kubernetes](/okd/deployment#Déploiement sur Kubernetes)
+[Déploiement sur Kubernetes](deployment.md)
