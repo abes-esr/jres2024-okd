@@ -51,3 +51,13 @@ Cette documentation est donnée à titre d'exemple du travail collaboratif accom
 \- [Registry d\'images](registry.md)
 
 \- [Usage de compose2manifests.sh](compose2manifests_functions.md)
+
+\- [CI/CD](ci_cd.md)
+
+\- [CI/CD avec les API Openshift (buildConfig)](buildConfig.md)
+
+\- [Build initial et CD sur Kubernetes](deloyment.md)
+
+\- [ImageStream](imagestream.md)
+
+
