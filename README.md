@@ -10,6 +10,7 @@ Ces scripts ont été développés dans le cadre d'un POC piloté par le Service
 ## JRES 24
 Le comité d'organisation des [JRES24](https://2024.jres.org/) (Rennes, 10-13 décembre 24) ayant validé notre proposition ["Vers la symphonie des conteneurs"](https://2024.jres.org/programme#modal-23), nous avons avons ajouté à ce repo l'ensemble des éléments qui ont été nécessaires à la conception de l'[article](documentation/article_jres24.md) et du [poster](documentation/files/poster-jres-2024.jpg).
 
+### version 1.0
 La version [1.0](https://github.com/abes-esr/jres2024-okd/releases/tag/1.0) script [compose2manifests.sh](compose2manifests.sh) a été complété pour répondre à un cas d'usage plus global, apportant des fonctionnalités supplémentaires telles que:
   * l'installation de pré-requis
   * la recherche automatiques des hôtes Docker
@@ -23,9 +24,17 @@ La version [1.0](https://github.com/abes-esr/jres2024-okd/releases/tag/1.0) scri
   * le support des montages NFS
   * etc...
 
+L'utilisation et la description des fonctions de ce script sont détaillées [ici](documentation/compose2manifests_functions.md).
+
+#### Vidéo de cas d'usage du déploiement de l'application Qualimarc
+https://vimeo.com/1022133270/90cfd9e0a7 
+
+### version 2.0
 La version [2.0](https://github.com/abes-esr/jres2024-okd/releases/tag/2.0) apporte le support du CI/CD Openshift (sur le cluster) ainsi que le build de l'image en local.
 
-L'utilisation et la description des fonctions de ce script sont détaillées [ici](documentation/compose2manifests_functions.md).
+#### Vidéo de cas d'usage du déploiement de l'application Abesstp après le build d'une image 
+https://vimeo.com/1037464417.
+
 
 La documentation détaillée relative à l'article et à OKD/Openshift peut être consultée à partir de ce [menu](documentation/README.md).
 
@@ -37,15 +46,6 @@ Pour être pertinent, ce script a été testé avec succès pour la conversion d
 - [abesstp](https://github.com/abes-esr/abesstp-docker)
 - [item](https://github.com/abes-esr/item-docker)
 
-### Cas d'usage du déploiement de l'application Qualimarc
-Vidéo d'exemple d'utilisation du script 1.0 avec [Qualimarc](https://qualimarc.sudoc.fr)
-
-https://vimeo.com/1022133270/90cfd9e0a7 
-
-### Cas d'usage du déploiement de l'application Abesstp après le build d'une image 
-Vidéo d'exemple d'utilisation du script 2.0 avec [AbesSTP](https://stp.abes.fr)
-
- https://vimeo.com/1037464417.
 
  Ce cas inclut la construction d'une image suivant un contexte de build avec Openshift ou en local.
 
