@@ -58,6 +58,6 @@ Cette documentation est donnée à titre d'exemple du travail collaboratif accom
 
 \- [Build initial et CD sur Kubernetes](deployment.md)
 
-\- [ImageStream](imagestream.md)
+\- [ Utilisation d'ImageStream avec le deployment k8s](imagestream.md)
 
 
